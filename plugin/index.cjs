@@ -13,6 +13,12 @@ const defaultGateConstants = require("../defaults/gate-location-constants.json")
 const defaultGateSettings = require("../defaults/gate-settings.json");
 const defaultAnchorState = require("../defaults/anchor-state.json");
 const STATUS_PATH = "plugins.ajrmMarinePlanning";
+const SERVICE_REGISTRIES = Object.freeze({
+	ajrmMarineLocations: Symbol.for("mcdonaldajr.ajrmMarineLocations"),
+	ajrmMarineTides: Symbol.for("mcdonaldajr.ajrmMarineTides"),
+	ajrmMarineWeather: Symbol.for("mcdonaldajr.ajrmMarineWeather"),
+});
+const PLANNING_DIAGNOSTICS_REGISTRY = Symbol.for("mcdonaldajr.ajrmMarinePlanningDiagnostics");
 
 function clone(value) { return structuredClone(value); }
 
@@ -109,12 +115,16 @@ module.exports = function ajrmMarinePlanning(app) {
 			contract: "ajrm-marine-planning-diagnostics-v1",
 			snapshot: diagnosticSnapshot,
 		});
+		globalThis[PLANNING_DIAGNOSTICS_REGISTRY] = app.ajrmMarinePlanningDiagnostics;
 		app.setPluginStatus?.(`Started v${packageJson.version}`);
 		publishStatus();
 	};
 
 	plugin.stop = () => {
 		running = false;
+		if (globalThis[PLANNING_DIAGNOSTICS_REGISTRY] === app.ajrmMarinePlanningDiagnostics) {
+			delete globalThis[PLANNING_DIAGNOSTICS_REGISTRY];
+		}
 		delete app.ajrmMarinePlanningDiagnostics;
 		publishStatus(null);
 		app.setPluginStatus?.("Stopped");
@@ -143,14 +153,14 @@ module.exports = function ajrmMarinePlanning(app) {
 		router.get("/gate/settings", async (_req, res) => {
 			const settings = { ...defaultGateSettings, ...(await readJson(gateSettingsFile, {})) };
 			delete settings.ukhoApiKey;
-			res.json({ ...settings, ukhoApiKeySet: app.ajrmMarineTides?.configured === true, tideManagedBy: "AJRM Marine Location Editor" });
+			res.json({ ...settings, ukhoApiKeySet: sharedService("ajrmMarineTides")?.configured === true, tideManagedBy: "AJRM Marine Location Editor" });
 		});
 		router.post("/gate/settings", requireWrite(async (req, res) => {
 			const current = await readJson(gateSettingsFile, {});
 			const next = { ...current, ...(req.body || {}) };
 			delete next.ukhoApiKey;
 			await writeJson(gateSettingsFile, next);
-			res.json({ ok: true, ...defaultGateSettings, ...next, ukhoApiKeySet: app.ajrmMarineTides?.configured === true });
+			res.json({ ok: true, ...defaultGateSettings, ...next, ukhoApiKeySet: sharedService("ajrmMarineTides")?.configured === true });
 		}));
 		router.get("/gate/weather", async (req, res) => {
 			try {
@@ -187,13 +197,13 @@ module.exports = function ajrmMarinePlanning(app) {
 
 		router.get("/anchor/state", async (_req, res) => {
 			const state = await anchorState();
-			res.json(publicAnchorState(state, await tideStatus(false), app.ajrmMarineTides?.configured === true));
+			res.json(publicAnchorState(state, await tideStatus(false), sharedService("ajrmMarineTides")?.configured === true));
 		});
 		router.put("/anchor/state", requireWrite(async (req, res) => {
 			const next = { ...clone(defaultAnchorState), ...(req.body || {}) };
 			next.tideData = { ...(next.tideData || {}), ukhoApiKey: "", events: [], cache: null };
 			await writeJson(anchorStateFile, next);
-			res.json(publicAnchorState(next, await tideStatus(false), app.ajrmMarineTides?.configured === true));
+			res.json(publicAnchorState(next, await tideStatus(false), sharedService("ajrmMarineTides")?.configured === true));
 		}));
 		router.put("/anchor/tide-data/settings", requireWrite(async (req, res) => {
 			const state = await anchorState();
@@ -208,22 +218,25 @@ module.exports = function ajrmMarinePlanning(app) {
 				events: [], cache: null,
 			};
 			await writeJson(anchorStateFile, state);
-			res.json(publicAnchorState(state, await tideStatus(false), app.ajrmMarineTides?.configured === true).tideData);
+			res.json(publicAnchorState(state, await tideStatus(false), sharedService("ajrmMarineTides")?.configured === true).tideData);
 		}));
 		router.post("/anchor/tide-data/refresh", requireWrite(async (_req, res) => {
 			const state = await anchorState();
-			res.json(publicAnchorState(state, await tideStatus(true), app.ajrmMarineTides?.configured === true).tideData);
+			res.json(publicAnchorState(state, await tideStatus(true), sharedService("ajrmMarineTides")?.configured === true).tideData);
 		}));
 		router.get("/anchor/live", (_req, res) => res.json(liveInputs()));
 	};
 
 	function status() {
+		const locations = sharedService("ajrmMarineLocations");
+		const tides = sharedService("ajrmMarineTides");
+		const weather = sharedService("ajrmMarineWeather");
 		return {
 			plugin: plugin.id, version: packageJson.version, enabled: running,
-			locationsService: app.ajrmMarineLocations?.contract || null,
-			tideService: app.ajrmMarineTides?.contract || null,
-			weatherService: app.ajrmMarineWeather?.contract || null,
-			ready: running && Boolean(app.ajrmMarineLocations && app.ajrmMarineTides && app.ajrmMarineWeather),
+			locationsService: locations?.contract || null,
+			tideService: tides?.contract || null,
+			weatherService: weather?.contract || null,
+			ready: running && Boolean(locations && tides && weather),
 			updatedAt: new Date().toISOString(),
 		};
 	}
@@ -258,8 +271,13 @@ module.exports = function ajrmMarinePlanning(app) {
 	}
 
 	function requireService(name, label) {
-		if (!app[name]) throw new Error(`Shared ${label} service is unavailable. Enable AJRM Marine Location Editor.`);
-		return app[name];
+		const service = sharedService(name);
+		if (!service) throw new Error(`Shared ${label} service is unavailable. Enable AJRM Marine Location Editor.`);
+		return service;
+	}
+
+	function sharedService(name) {
+		return app[name] || globalThis[SERVICE_REGISTRIES[name]] || null;
 	}
 
 	async function sharedGateLocations() {
@@ -276,7 +294,7 @@ module.exports = function ajrmMarinePlanning(app) {
 
 	async function gateConstants() {
 		const saved = await readJson(gateConstantsFile, defaultGateConstants);
-		if (!app.ajrmMarineLocations) return saved;
+		if (!sharedService("ajrmMarineLocations")) return saved;
 		const shared = await sharedGateLocations();
 		for (const location of shared) {
 			const existingName = Object.keys(saved).find((name) => normalizeName(name) === normalizeName(location.name));
@@ -304,9 +322,10 @@ module.exports = function ajrmMarinePlanning(app) {
 	}
 
 	async function tideStatus(force) {
-		if (!app.ajrmMarineTides) return null;
+		const tides = sharedService("ajrmMarineTides");
+		if (!tides) return null;
 		const request = { includeEvents: true };
-		return force ? app.ajrmMarineTides.refresh(request) : app.ajrmMarineTides.status(request);
+		return force ? tides.refresh(request) : tides.status(request);
 	}
 
 	function liveInputs() {

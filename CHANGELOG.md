@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.2 - 2026-08-18
+
+- Resolve Location Editor's shared location, tide and weather services through
+  their process-wide registries as well as the local plugin wrapper.
+- Fix the persistent “Shared weather/tide service is unavailable” error in
+  Signal K, where each plugin receives a different `app` wrapper.
+
 ## 0.5.1 - 2026-08-18
 
 - Expose a read-only in-process diagnostics snapshot containing planner

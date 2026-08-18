@@ -71,6 +71,24 @@ test("gate weather and tides use shared services and authoritative location", as
 	plugin.stop();
 });
 
+test("gate weather and tides resolve Location Editor services registered by another plugin app wrapper", async (t) => {
+	const { app, calls, call, plugin } = await fixture(t);
+	const names = ["ajrmMarineLocations", "ajrmMarineTides", "ajrmMarineWeather"];
+	for (const name of names) {
+		const registry = Symbol.for(`mcdonaldajr.${name}`);
+		globalThis[registry] = app[name];
+		delete app[name];
+		t.after(() => { delete globalThis[registry]; });
+	}
+	let result = await call("GET", "/gate/weather", { query: { location: "Cuan Sound" } });
+	assert.equal(result.statusCode, 200);
+	result = await call("GET", "/gate/tides", { query: { location: "Cuan Sound" } });
+	assert.equal(result.statusCode, 200);
+	assert.equal(calls.weather.length, 1);
+	assert.equal(calls.tide.length, 1);
+	plugin.stop();
+});
+
 test("anchor state contains no API secret and uses shared tide events", async (t) => {
 	const { call, plugin } = await fixture(t);
 	const result = await call("GET", "/anchor/state");

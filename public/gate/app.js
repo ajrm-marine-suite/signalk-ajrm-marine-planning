@@ -1,6 +1,6 @@
 /** Browser-side gate-passage model and UI, backed by shared Signal K services. */
 const $ = (id) => document.getElementById(id);
-const webVersion = "0.5.1";
+const webVersion = "0.5.2";
 
 const selectedColumns = [
   { label: "Local Time (UK)", source: "Local Time", format: "localTimeWithDay" },
