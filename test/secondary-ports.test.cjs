@@ -10,10 +10,10 @@ const tobermory = {
 	properties: { tide: {
 		parentLocationRef: "/resources/locations/oban",
 		secondaryPortCorrections: {
-			contract: "ajrm-secondary-port-corrections-v1", legacyId: "tobermory",
-			standardReferenceLevels: { mhws: 4, mhwn: 2.9, mlwn: 1.8, mlws: 0.7 },
-			hwTimeOffsetsMinutes: { t0000: 20, t0600: 20, t1200: 20, t1800: 20 },
-			lwTimeOffsetsMinutes: { t0000: 20, t0600: 20, t1200: 20, t1800: 20 },
+			contract: "ajrm-secondary-port-corrections-v2", legacyId: "tobermory",
+			parentReferenceLevels: { mhws: 4, mhwn: 2.9, mlwn: 1.8, mlws: 0.7 },
+			highWaterTimeOffsets: [{ referenceTimeMinutes: 60, offsetMinutes: 20 }],
+			lowWaterTimeOffsets: [{ referenceTimeMinutes: 80, offsetMinutes: 20 }],
 			heightDifferencesM: { mhws: 0.5, mhwn: 0.6, mlwn: 0.1, mlws: 0.2 },
 			notes: "Migrated test record",
 		},
@@ -26,7 +26,7 @@ test("projects an Oban secondary-port location into the planner contract", () =>
 	assert.equal(result[0].id, "tobermory");
 	assert.equal(result[0].locationId, "tobermory-location");
 	assert.equal(result[0].standardPort, "Oban");
-	assert.equal(result[0].hwOffsets.t0600, 20);
+	assert.deepEqual(result[0].hwOffsetPoints[0], { referenceTimeMinutes: 60, offsetMinutes: 20 });
 	assert.equal(result[0].heightDiffs.mlws, 0.2);
 });
 

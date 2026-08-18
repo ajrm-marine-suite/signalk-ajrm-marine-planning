@@ -97,6 +97,8 @@ function publicAnchorState(state, tideResult, tideConfigured = false) {
 		ukhoApiKey: undefined,
 		ukhoApiKeySet: tideConfigured,
 		managedBy: "AJRM Marine Location Editor",
+		resolvedLocationId: tideResult?.selectedPort?.id || null,
+		referenceLevels: tideResult?.referenceLevels || null,
 		events: tideResult?.valid ? ukhoEvents(tideResult) : value.tideData?.events || [],
 		cache: tideResult ? cacheShape(tideResult) : value.tideData?.cache || null,
 		error: tideResult?.error || "",
@@ -362,7 +364,7 @@ module.exports = function ajrmMarinePlanning(app) {
 		const tides = sharedService("ajrmMarineTides");
 		if (!tides) return null;
 		const selected = state?.secondaryPorts?.find((entry) => entry.id === state?.tide?.selectedPortId);
-		const request = { includeEvents: true, contextLocationId: selected?.standardPortLocationId || selected?.locationId };
+		const request = { includeEvents: true, portId: selected?.locationId };
 		return force ? tides.refresh(request) : tides.status(request);
 	}
 

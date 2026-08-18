@@ -1,11 +1,18 @@
 # AJRM Marine Planning
 
+Version `0.5.6` consumes Location Editor's centrally resolved standard or
+secondary-port events. Planning no longer reapplies a secondary correction in
+the browser when the shared Tide Resolver has already corrected the selected
+location. It accepts the flexible v2 time points used by Reeds-style tables for
+manual fallback calculations.
+
 Version `0.5.5` completes shared tidal-data ownership. Gate Passage now reads
 all gate constants and each gate's standard-port relationship from Location
 Editor; its former editor and private constants file are removed. Anchor Force
 offers one read-only location list containing both standard and secondary
 ports, requests predictions for the selected standard station, and applies a
-secondary correction only where the selected record requires one.
+secondary correction only for a manual fallback that has not already been
+resolved by Location Editor.
 
 Version `0.5.3` requires explicit timezone information on tide events received
 from the shared Tide Resolver and preserves their normalized UTC instants for

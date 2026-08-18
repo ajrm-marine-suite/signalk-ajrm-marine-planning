@@ -427,8 +427,10 @@ function legacyOffsets(port, type) {
 }
 
 function portOffsets(port, type) {
-  const source = type === "hw" ? port.hwOffsets : port.lwOffsets;
-  return { ...legacyOffsets(port, type), ...(source || {}) };
+	const points = type === "hw" ? port.hwOffsetPoints : port.lwOffsetPoints;
+	if (Array.isArray(points) && points.length) return points;
+	const source = type === "hw" ? port.hwOffsets : port.lwOffsets;
+	return { ...legacyOffsets(port, type), ...(source || {}) };
 }
 
 function portHeightDiffs(port) {
@@ -451,25 +453,31 @@ function portReferenceLevels(port) {
 }
 
 function interpolateTimeOffset(offsets, minutes) {
-  const points = [
+	const points = Array.isArray(offsets) ? offsets.map((point) => ({
+		minute: Number(point.referenceTimeMinutes), value: Number(point.offsetMinutes)
+	})).sort((left, right) => left.minute - right.minute) : [
     { minute: 0, value: Number(offsets.t0000 || 0) },
     { minute: 360, value: Number(offsets.t0600 || 0) },
     { minute: 720, value: Number(offsets.t1200 || 0) },
     { minute: 1080, value: Number(offsets.t1800 || 0) },
     { minute: 1440, value: Number(offsets.t0000 || 0) }
-  ];
+	];
+	if (!points.length) return 0;
+	if (points.length === 1) return points[0].value;
+	const circular = [...points, { minute: points[0].minute + 1440, value: points[0].value }];
   const normalized = ((minutes % 1440) + 1440) % 1440;
-  let before = points[0];
-  let after = points[points.length - 1];
-  for (let index = 0; index < points.length - 1; index += 1) {
-    if (points[index].minute <= normalized && normalized <= points[index + 1].minute) {
-      before = points[index];
-      after = points[index + 1];
-      break;
-    }
+	const candidate = normalized < circular[0].minute ? normalized + 1440 : normalized;
+	let before = circular[0];
+	let after = circular[circular.length - 1];
+	for (let index = 0; index < circular.length - 1; index += 1) {
+		if (circular[index].minute <= candidate && candidate <= circular[index + 1].minute) {
+			before = circular[index];
+			after = circular[index + 1];
+			break;
+		}
   }
   const span = Math.max(1, after.minute - before.minute);
-  return before.value + ((after.value - before.value) * (normalized - before.minute)) / span;
+	return before.value + ((after.value - before.value) * (candidate - before.minute)) / span;
 }
 
 function secondaryTideValues(port = selectedSecondaryPort(), referencePort = serverState.tide.referencePort) {
@@ -539,7 +547,9 @@ function referencePortTideValuesForNow(now = new Date()) {
 
 function activeTideValues(now = new Date()) {
   const referencePort = referencePortTideValuesForNow(now);
-  if (serverState.tide.source === "secondary") return secondaryTideValues(selectedSecondaryPort(), referencePort);
+	const selected = selectedSecondaryPort();
+	const centrallyResolved = referencePort.downloaded && selected && serverState.tideData.resolvedLocationId === selected.locationId;
+	if (serverState.tide.source === "secondary" && !centrallyResolved) return secondaryTideValues(selected, referencePort);
   const date = referencePort.date || referencePortDate();
   return {
     ...referencePort,
@@ -550,7 +560,10 @@ function activeTideValues(now = new Date()) {
 }
 
 function springPercentFromRange(range) {
-  const reference = selectedSecondaryPort() ? portReferenceLevels(selectedSecondaryPort()) : serverState.tide.standardReferenceLevels;
+	const selected = selectedSecondaryPort();
+	const reference = selected && serverState.tideData.resolvedLocationId === selected.locationId
+		? (serverState.tideData.referenceLevels || portReferenceLevels(selected))
+		: selected ? portReferenceLevels(selected) : serverState.tide.standardReferenceLevels;
   const springRange = Number(reference.mhws || 0) - Number(reference.mlws || 0);
   const neapRange = Number(reference.mhwn || 0) - Number(reference.mlwn || 0);
   const spread = springRange - neapRange;

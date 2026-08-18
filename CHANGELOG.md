@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.6 - 2026-08-18
+
+- Request the specifically selected standard or secondary location from the
+  shared Tide Resolver.
+- Consume centrally corrected secondary-port events without applying the
+  correction a second time in Anchor Force.
+- Read the flexible v2 HW/LW correction-point contract and follow a
+  secondary-port's parent chain to its underlying UKHO standard station.
+
 ## 0.5.5 - 2026-08-18
 
 - Remove Gate Passage's duplicated browser defaults, writable constants API,

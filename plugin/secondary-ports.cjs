@@ -4,7 +4,7 @@
  * Planning deliberately does not persist or edit this data.
  */
 
-const CORRECTION_CONTRACT = "ajrm-secondary-port-corrections-v1";
+const CORRECTION_CONTRACT = "ajrm-secondary-port-corrections-v2";
 
 function secondaryPortsFromLocations(locations, options = {}) {
 	const values = Array.isArray(locations) ? locations : [];
@@ -26,9 +26,9 @@ function secondaryPortsFromLocations(locations, options = {}) {
 			locationId: location.id,
 			name: location.name,
 			standardPort,
-			standardReferenceLevels: correction.standardReferenceLevels || null,
-			hwOffsets: copyGroup(correction.hwTimeOffsetsMinutes, ["t0000", "t0600", "t1200", "t1800"]),
-			lwOffsets: copyGroup(correction.lwTimeOffsetsMinutes, ["t0000", "t0600", "t1200", "t1800"]),
+			standardReferenceLevels: correction.parentReferenceLevels || null,
+			hwOffsetPoints: copyPoints(correction.highWaterTimeOffsets),
+			lwOffsetPoints: copyPoints(correction.lowWaterTimeOffsets),
 			heightDiffs: copyGroup(correction.heightDifferencesM, ["mhws", "mhwn", "mlwn", "mlws"]),
 			notes: String(correction.notes || ""),
 		}];
@@ -37,6 +37,7 @@ function secondaryPortsFromLocations(locations, options = {}) {
 
 function tideLocationsFromLocations(locations) {
 	const values = Array.isArray(locations) ? locations : [];
+	const byId = new Map(values.map((location) => [location?.id, location]));
 	const standards = values.flatMap((location) => {
 		if (!location?.types?.includes("tidalStandardPort")) return [];
 		const tide = location.properties?.tide || {};
@@ -50,16 +51,22 @@ function tideLocationsFromLocations(locations) {
 			standardPort: tide.stationName || location.name,
 			stationId: tide.stationId,
 			standardReferenceLevels: tide.referenceLevels || null,
-			hwOffsets: zeroGroup(["t0000", "t0600", "t1200", "t1800"]),
-			lwOffsets: zeroGroup(["t0000", "t0600", "t1200", "t1800"]),
+			hwOffsetPoints: [{ referenceTimeMinutes: 0, offsetMinutes: 0 }],
+			lwOffsetPoints: [{ referenceTimeMinutes: 0, offsetMinutes: 0 }],
 			heightDiffs: zeroGroup(["mhws", "mhwn", "mlwn", "mlws"]),
 			notes: "Standard prediction port maintained by AJRM Marine Location Editor.",
 		}];
 	});
+	function standardAncestor(location, visited = new Set()) {
+		if (!location || visited.has(location.id)) return null;
+		if (location.types?.includes("tidalStandardPort")) return location;
+		visited.add(location.id);
+		const parentId = String(location.properties?.tide?.parentLocationRef || "").split("/").at(-1);
+		return standardAncestor(byId.get(parentId), visited);
+	}
 	const secondaries = secondaryPortsFromLocations(values).flatMap((port) => {
 		const location = values.find((entry) => entry.id === port.locationId);
-		const parentId = String(location?.properties?.tide?.parentLocationRef || "").split("/").at(-1);
-		const parent = values.find((entry) => entry.id === parentId);
+		const parent = standardAncestor(location);
 		if (!parent?.properties?.tide?.providerId || !parent.properties.tide.stationId) return [];
 		return [{
 			...port,
@@ -73,6 +80,13 @@ function tideLocationsFromLocations(locations) {
 
 function copyGroup(value, keys) {
 	return Object.fromEntries(keys.map((key) => [key, Number(value?.[key])]));
+}
+
+function copyPoints(value) {
+	return (Array.isArray(value) ? value : []).map((point) => ({
+		referenceTimeMinutes: Number(point.referenceTimeMinutes),
+		offsetMinutes: Number(point.offsetMinutes),
+	}));
 }
 
 function zeroGroup(keys) { return Object.fromEntries(keys.map((key) => [key, 0])); }
