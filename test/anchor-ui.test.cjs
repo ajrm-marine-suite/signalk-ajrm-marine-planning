@@ -18,6 +18,12 @@ test("anchor tide UI selects Location Editor ports without entered HW/LW fields"
 	assert.doesNotMatch(html, /id="(?:hwTime|lwTime|hwHeight|lwHeight)"/);
 	assert.doesNotMatch(html, /data-tide-source=/);
 	assert.doesNotMatch(html, /id="tideData(?:AccountEmail|ApiKey)"/);
+
+	const defaultInputBlock = script.match(/const defaults = \{([\s\S]*?)\n\};/)?.[1] || "";
+	const defaultInputIds = [...defaultInputBlock.matchAll(/^\s{2}([A-Za-z0-9_]+):/gm)].map((match) => match[1]);
+	for (const id of defaultInputIds) {
+		assert.match(html, new RegExp(`id=["']${id}["']`), `default input ${id} must exist in the Anchor Force UI`);
+	}
 });
 
 test("port changes use focused APIs and do not reapply secondary corrections", () => {
@@ -28,7 +34,7 @@ test("port changes use focused APIs and do not reapply secondary corrections", (
 });
 
 test("planning webapps publish one cache-busted release and no retired standalone controls", () => {
-	for (const source of [html, gateHtml, suiteHtml]) assert.match(source, /0\.5\.9/);
+	for (const source of [html, gateHtml, suiteHtml]) assert.match(source, /0\.5\.10/);
 	assert.doesNotMatch(html, /anchor-force-planner|tideDataAccountEmail|tideDataApiKey/);
 	assert.doesNotMatch(gateHtml, /gate-passage-planner|id="ukhoApiKey"|id="ukhoAccountEmail"/);
 	assert.doesNotMatch(gateScript, /function (?:saveLocationConstants|addLocation|deleteLocation|defaultLocationValues)/);

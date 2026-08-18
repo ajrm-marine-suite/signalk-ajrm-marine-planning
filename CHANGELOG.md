@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.10 - 2026-08-18
+
+- Fix Anchor Force startup after the manual HW/LW controls were removed, so it
+  now loads the standard and secondary tidal-port catalogue from Location
+  Editor.
+- Add a regression check requiring every browser default input to have a
+  corresponding control in the Anchor Force page.
+
 ## 0.5.9 - 2026-08-18
 
 - Consume only Location Editor's current v4 secondary-port and v1 tidal-gate

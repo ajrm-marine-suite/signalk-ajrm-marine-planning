@@ -1,5 +1,5 @@
 /** Browser-side anchor load, rode, scope, clearance and catenary model. */
-const webVersion = "0.5.9";
+const webVersion = "0.5.10";
 const halfCycleMinutes = 12 * 60 + 25;
 
 const defaults = {
@@ -11,8 +11,6 @@ const defaults = {
   depthLw: 5,
   echoBelowKeel: 6.2,
   tideHeight: 3,
-  hwHeight: 4,
-  lwHeight: 1,
   rodeLength: 40,
   bowHeight: 1,
   chainLength: 50,
