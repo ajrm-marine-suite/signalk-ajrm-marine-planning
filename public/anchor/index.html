@@ -1,0 +1,493 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Anchor Force Planner</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <h1>Anchor Force Planner</h1>
+      </div>
+    </header>
+
+    <main>
+      <section class="safetyNotice" aria-label="Safety notice">
+        <strong>Planning aid only.</strong>
+        <span>Calculations mirror the workbook model and have not been independently validated for anchoring decisions. Check both high-water load/scope and low-water clearance, forecast, tidal stream, seabed, swinging room, ground tackle limits and observed conditions. The skipper remains responsible.</span>
+      </section>
+
+      <nav class="tabs" aria-label="Planner tabs">
+        <button class="tabButton active" type="button" data-tab="planner" title="Main anchoring planner: enter conditions, choose a tide view, and see rode, clearance, catenary, and anchor holding checks.">Planner</button>
+        <button class="tabButton" type="button" data-tab="tide" title="Manual tide entry and secondary-port selection. Shows current tide rise, spring percentage, keel clearance, and tide curve.">Tide</button>
+        <button class="tabButton" type="button" data-tab="tideData" title="Fetch and inspect downloaded Oban tide events from the configured tide API.">Tide Data</button>
+        <button class="tabButton" type="button" data-tab="secondaryPorts" title="Add, edit, or delete almanac-style secondary-port corrections.">Secondary Ports</button>
+        <button class="tabButton" type="button" data-tab="settings" title="Boat constants, ground tackle, echo-sounder mode, API settings, and save/reset controls.">Settings</button>
+        <button class="tabButton" type="button" data-tab="force" title="Wind force lookup table and curve using the current boat windage settings.">Wind Force</button>
+        <button class="tabButton" type="button" data-tab="formulas" title="Formula notes for the calculations used by the app.">Formulas</button>
+        <button class="tabButton" type="button" data-tab="about" title="Web and server version details, useful for confirming a Lubuntu update has taken effect.">About</button>
+      </nav>
+
+      <section id="plannerPanel" class="tabPanel active">
+        <section class="layoutGrid">
+          <section class="inputPanel" aria-label="Anchor inputs">
+            <div class="panelHeader">
+              <div>
+                <h2>Inputs</h2>
+                <p>Edit the assumptions and the planner recalculates immediately.</p>
+              </div>
+            </div>
+
+            <div class="inputGrid">
+              <label title="Expected true wind at the anchorage in knots. Wind load uses the Settings tab windage factor and increases with wind speed squared.">Wind speed
+                <span class="inputWithUnit"><input id="windSpeed" type="number" value="20" min="0" max="90" step="1"><span>kn</span></span>
+              </label>
+              <label title="Expected tidal stream through the anchorage in knots. This is separate from tide height and is added as horizontal load for catenary, recommended rode, and drag checks.">Tidal stream
+                <span class="inputWithUnit"><input id="tidalStream" type="number" value="1.0" min="0" max="8" step="0.1"><span>kn</span></span>
+              </label>
+              <label title="Charted depth at chart datum for the spot where the anchor is expected to lie. When using chart + tide, present water depth is charted depth plus calculated tide rise now.">Charted depth
+                <span class="inputWithUnit"><input id="depthLw" type="number" value="5" min="0" max="40" step="0.1"><span>m</span></span>
+              </label>
+              <label id="echoDepthLabel" title="Echo sounder reading now. Settings controls whether this is beneath keel or actual water depth from the surface.">Echo below keel now
+                <span class="inputWithUnit"><input id="echoBelowKeel" type="number" value="6.2" min="0" max="80" step="0.1"><span>m</span></span>
+              </label>
+              <label title="Calculated tide height above chart datum for the selected planner view. Now is interpolated; HW and LW buttons use their predicted event heights.">Tide rise selected
+                <span class="inputWithUnit"><input id="tideHeight" type="text" value="3.0" readonly><span>m</span></span>
+              </label>
+              <label title="Total rode you intend to deploy from bow roller to anchor. If more is entered than the boat carries, the app warns and caps the diagram at available chain plus rope.">Rode length
+                <span class="inputWithUnit"><input id="rodeLength" type="number" value="40" min="1" max="300" step="1"><span>m</span></span>
+              </label>
+            </div>
+            <div class="recommendationActions">
+              <button id="useLiveSignalK" type="button" title="Copy currently available Signal K wind, tidal-current and depth values into the planner. Missing values leave the manual entries unchanged.">Use live Signal K values</button>
+              <span id="liveSignalKStatus" class="dataStatus">Manual values remain authoritative until this button is pressed.</span>
+            </div>
+            <section class="depthSourcePanel" aria-label="Depth source">
+              <div class="depthSourceButtons" role="group" aria-label="Depth source used for calculations">
+                <button class="depthSourceButton active" type="button" data-depth-source="chart" title="Use charted depth plus calculated tide rise now as the present water depth.">Use chart + tide</button>
+                <button class="depthSourceButton" type="button" data-depth-source="sounder" title="Use the echo-sounder reading, adjusted by the Settings echo mode, as the present water depth.">Use echo sounder</button>
+              </div>
+              <div class="depthCompare">
+                <div title="Water depth from charted depth plus the tide rise selected in the planner tide control."><span>Chart + tide depth</span><strong id="chartDepthNow">-</strong></div>
+                <div title="Present water depth from the echo sounder, adjusted by the Settings echo mode."><span>Measured depth now</span><strong id="sounderDepthNow">-</strong></div>
+                <div title="Measured depth now minus chart+tide depth for the selected planner tide. For previous or next tide views, this is a comparison rather than a live calibration."><span>Difference</span><strong id="depthDifference">-</strong></div>
+              </div>
+            </section>
+            <div class="recommendationActions">
+              <button id="calculateIdealRode" type="button" title="Calculate two deployed-rode recommendations: minimum from scope and load, and optimal from high-water catenary keeping at least 1 m of chain on the seabed.">Calculate recommended rode</button>
+            </div>
+            <section id="scopeRecommendation" class="recommendationPanel" aria-live="polite">
+              <div class="recommendationOptions">
+                <div>
+                  <span>Minimum rode</span>
+                  <strong id="minimumRodeRecommendation">-</strong>
+                </div>
+                <div>
+                  <span>Optimal rode</span>
+                  <strong id="optimalRodeRecommendation">-</strong>
+                </div>
+              </div>
+              <p>Use the button to calculate a recommendation from the conditions now and boat settings.</p>
+              <div class="recommendationApplyActions">
+                <button id="applyMinimumRode" type="button" title="Copy the minimum recommended rode length into the Rode length input.">Apply minimum</button>
+                <button id="applyOptimalRode" type="button" title="Copy the optimal recommended rode length into the Rode length input.">Apply optimal</button>
+              </div>
+            </section>
+          </section>
+
+          <section class="resultsPanel" aria-label="Anchor result summary">
+            <div id="statusBanner" class="statusBanner">-</div>
+            <section class="summary" aria-label="Summary values">
+              <div title="Estimated horizontal wind load using windage factor, LOA squared, and wind speed squared."><span>Wind force</span><strong id="windForce">-</strong></div>
+              <div title="Estimated horizontal tidal-stream load from underwater projected area and stream speed squared."><span>Tidal load</span><strong id="tidalForce">-</strong></div>
+              <div title="Rode length entered in the planner. The diagram uses the available rode if this exceeds chain plus rope carried."><span>Rode set</span><strong id="rodeNeeded">-</strong></div>
+              <div title="Depth beneath the keel in the selected planner view, from the selected depth source."><span>Keel clearance</span><strong id="clearanceNow">-</strong></div>
+              <div title="Displayed scope for the selected planner view: rode length divided by water depth plus bow height."><span>Scope</span><strong id="scopeNow">-</strong></div>
+              <div title="Estimated chain still lying on the seabed at the selected high water. High water is the drag-risk case because the deepest water lifts the most chain."><span>Chain on seabed safety HW</span><strong id="seabedLength">-</strong></div>
+              <div title="Estimated suspended anchor, chain, and rope weight in the selected planner view."><span>Max lift weight</span><strong id="liftWeight">-</strong></div>
+              <div title="Estimated rope lying on the seabed in the selected planner view. Rope on the bottom can chafe."><span>Rope on seabed</span><strong id="ropeSeabed">-</strong></div>
+              <div title="Estimated chain lying on the seabed in the selected planner view."><span>Chain on seabed</span><strong id="chainSeabed">-</strong></div>
+              <div title="Selected high-water effective anchor holding minus wind plus tidal-stream load, after the pull-angle reduction."><span>Anchor margin safety HW</span><strong id="anchorMargin">-</strong></div>
+              <div title="Maximum wind load the anchor model allows at the selected high water with this rode length and tidal stream before the anchor margin reaches zero."><span>Max wind before drag</span><strong id="windDragLimit">-</strong></div>
+            </section>
+
+            <section class="visualPanel" aria-label="Anchor geometry">
+              <div id="diagramTabs" class="diagramTabs" aria-label="Planner tide view"></div>
+              <svg id="rodeDiagram" viewBox="0 0 860 300" role="img" aria-label="Rode geometry diagram"></svg>
+            </section>
+          </section>
+        </section>
+      </section>
+
+      <section id="tidePanel" class="tabPanel">
+        <div class="panelHeader">
+          <div>
+            <h2>Tide</h2>
+            <p>Enter Oban tide data, then optionally apply a saved secondary-port correction.</p>
+          </div>
+        </div>
+        <section class="inputPanel settingsPanel" aria-label="Tide settings">
+          <div class="depthSourcePanel tideSourcePanel" aria-label="Tide source">
+            <div class="depthSourceButtons" role="group" aria-label="Tide source used in calculations">
+              <button class="depthSourceButton tideSourceButton active" type="button" data-tide-source="oban" title="Use the entered Oban HW/LW times and heights in all tide calculations.">Use Oban</button>
+              <button class="depthSourceButton tideSourceButton" type="button" data-tide-source="secondary" title="Use the selected secondary port's calculated HW/LW times and heights in all tide calculations.">Use secondary port</button>
+            </div>
+            <label title="Saved secondary port correction to apply to the Oban standard-port values.">Secondary port
+              <select id="secondaryPortSelect">
+                <option value="">No secondary port selected</option>
+              </select>
+            </label>
+          </div>
+          <h3>Oban standard port</h3>
+          <div class="inputGrid settingsGrid">
+            <label title="High-water time nearest the anchoring period, shown in the Tide Data display-time setting. UKHO downloaded times are stored internally as UT.">HW time
+              <span class="inputWithUnit"><input id="hwTime" type="time" value="15:00"><span id="hwTimeUnit">UT</span></span>
+            </label>
+            <label title="Low-water time nearest the anchoring period, shown in the Tide Data display-time setting. The app interpolates between LW and HW using the rule of twelfths.">LW time
+              <span class="inputWithUnit"><input id="lwTime" type="time" value="09:00"><span id="lwTimeUnit">UT</span></span>
+            </label>
+            <label title="Predicted high-water height above chart datum. Used for deepest-water rode geometry and anchor-drag checks.">HW height
+              <span class="inputWithUnit"><input id="hwHeight" type="number" value="4" min="-2" max="15" step="0.1"><span>m</span></span>
+            </label>
+            <label title="Predicted low-water height above chart datum. Used for grounding and minimum keel-clearance checks.">LW height
+              <span class="inputWithUnit"><input id="lwHeight" type="number" value="1" min="-2" max="15" step="0.1"><span>m</span></span>
+            </label>
+          </div>
+          <section class="secondaryPreview" aria-label="Calculated secondary port tide">
+            <div class="panelHeader">
+              <div>
+                <h3>Calculated secondary port</h3>
+                <p>Live calculation from the selected port's saved corrections.</p>
+              </div>
+            </div>
+            <section class="tideSummary compactSummary" aria-live="polite">
+              <div title="Calculated high-water time after applying the selected secondary port's HW correction to Oban."><span>HW time</span><strong id="secondaryHwTime">-</strong></div>
+              <div title="Calculated low-water time after applying the selected secondary port's LW correction to Oban."><span>LW time</span><strong id="secondaryLwTime">-</strong></div>
+              <div title="Calculated secondary-port high-water height after interpolating height differences."><span>HW height</span><strong id="secondaryHwHeight">-</strong></div>
+              <div title="Calculated secondary-port low-water height after interpolating height differences."><span>LW height</span><strong id="secondaryLwHeight">-</strong></div>
+            </section>
+          </section>
+        </section>
+        <section id="tideSummary" class="tideSummary" aria-live="polite">
+          <div title="The actual clock time used for the Tide tab's present-time calculation."><span>Time now</span><strong id="currentTimeLabel">-</strong></div>
+          <div title="Estimated current tide height above chart datum from downloaded events or entered HW/LW values."><span>Tide rise now</span><strong id="currentRiseLabel">-</strong></div>
+          <div title="How spring-like the current tide range is, based on Oban reference levels. Values can be below 0% or above 100%."><span>% Spring</span><strong id="springPercentLabel">-</strong></div>
+          <div title="Estimated depth beneath keel right now using the selected depth source."><span>Keel clearance now</span><strong id="currentDepthLabel">-</strong></div>
+          <div title="Predicted depth beneath keel at the relevant low water for the Tide tab. This is the grounding check on this tab."><span>Low-water clearance</span><strong id="lowWaterClearanceLabel">-</strong></div>
+        </section>
+        <section class="chartPanel tideCurvePanel" aria-label="24 hour tide curve">
+          <svg id="tideCurve" viewBox="0 0 820 280" role="img" aria-label="24 hour tide curve"></svg>
+        </section>
+        <section id="tideStatus" class="statusBanner">-</section>
+      </section>
+
+      <section id="tideDataPanel" class="tabPanel">
+        <div class="panelHeader">
+          <div>
+            <h2>Tide Data</h2>
+            <p>Download and manage Oban tide events from the ADMIRALTY UK Tidal API.</p>
+          </div>
+          <button id="refreshTideData" type="button" title="Fetch fresh Oban tide data, or use today's server cache if it is still fresh.">Refresh tides</button>
+        </div>
+        <section class="tideSummary compactSummary" aria-label="Tide data status">
+          <div title="Configured standard-port tide station used for downloads."><span>Station</span><strong id="tideDataStationLabel">-</strong></div>
+          <div title="Whether the local server has an API key stored or available from the environment."><span>API key</span><strong id="tideDataKeyLabel">-</strong></div>
+          <div title="When the local server last fetched or cached tide data."><span>Fetched</span><strong id="tideDataFetchedLabel">-</strong></div>
+          <div title="Number of downloaded high-water and low-water events currently available."><span>Events</span><strong id="tideDataCountLabel">-</strong></div>
+          <div title="Whether the displayed tide data is fresh, cached, stale, or unavailable."><span>Status</span><strong id="tideDataStatusLabel">-</strong></div>
+        </section>
+        <section class="tableWrap secondaryTable" aria-label="Fetched Oban tide events">
+          <table id="tideDataTable">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Event</th>
+                <th>Time</th>
+                <th>Height</th>
+                <th>% Spring</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </section>
+      </section>
+
+      <section id="secondaryPortsPanel" class="tabPanel">
+        <div class="panelHeader">
+          <div>
+            <h2>Secondary Ports</h2>
+            <p>Maintain your own correction table from Oban. Enter data only from sources you are licensed to use.</p>
+          </div>
+        </div>
+        <section class="inputPanel settingsPanel secondaryEditor" aria-label="Secondary port editor">
+          <section class="inputPanel obanReferenceEditor" aria-label="Oban reference levels">
+            <h3>Oban reference levels</h3>
+            <div class="inputGrid settingsGrid">
+              <label title="Oban Mean High Water Springs, from the almanac. Used to calculate %Spring for HW and interpolate secondary-port HW height differences.">MHWS
+                <span class="inputWithUnit"><input id="obanMhws" type="number" value="4.0" step="0.1"><span>m</span></span>
+              </label>
+              <label title="Oban Mean High Water Neaps, from the almanac. Used to calculate %Spring for HW and interpolate secondary-port HW height differences.">MHWN
+                <span class="inputWithUnit"><input id="obanMhwn" type="number" value="2.9" step="0.1"><span>m</span></span>
+              </label>
+              <label title="Oban Mean Low Water Neaps, from the almanac. Used to calculate %Spring for LW and interpolate secondary-port LW height differences.">MLWN
+                <span class="inputWithUnit"><input id="obanMlwn" type="number" value="1.8" step="0.1"><span>m</span></span>
+              </label>
+              <label title="Oban Mean Low Water Springs, from the almanac. Used to calculate %Spring for LW and interpolate secondary-port LW height differences.">MLWS
+                <span class="inputWithUnit"><input id="obanMlws" type="number" value="0.7" step="0.1"><span>m</span></span>
+              </label>
+            </div>
+          </section>
+          <label title="Secondary port or anchorage name shown in the Tide tab pulldown.">Port name
+            <input id="secondaryPortName" type="text" placeholder="e.g. Port Ellen">
+          </label>
+          <section class="tableWrap secondaryAlmanacBlock" aria-label="Secondary port correction block">
+            <table>
+              <thead>
+                <tr>
+                  <th colspan="2">Standard Port OBAN</th>
+                  <th colspan="4">Times</th>
+                  <th colspan="4">Height differences in metres</th>
+                </tr>
+                <tr>
+                  <th colspan="2"></th>
+                  <th>0000</th>
+                  <th>0600</th>
+                  <th>1200</th>
+                  <th>1800</th>
+                  <th>MHWS<br><span id="obanMhwsLabel">4.0</span></th>
+                  <th>MHWN<br><span id="obanMhwnLabel">2.9</span></th>
+                  <th>MLWN<br><span id="obanMlwnLabel">1.8</span></th>
+                  <th>MLWS<br><span id="obanMlwsLabel">0.7</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <th rowspan="2">Differences</th>
+                  <th>HW</th>
+                  <td><input id="secondaryHw0000" type="number" value="0" step="1" title="Minutes to add to Oban HW when Oban HW is near 0000."></td>
+                  <td><input id="secondaryHw0600" type="number" value="0" step="1" title="Minutes to add to Oban HW when Oban HW is near 0600."></td>
+                  <td><input id="secondaryHw1200" type="number" value="0" step="1" title="Minutes to add to Oban HW when Oban HW is near 1200."></td>
+                  <td><input id="secondaryHw1800" type="number" value="0" step="1" title="Minutes to add to Oban HW when Oban HW is near 1800."></td>
+                  <td><input id="secondaryDiffMhws" type="number" value="0" step="0.1" title="Height difference to add at MHWS."></td>
+                  <td><input id="secondaryDiffMhwn" type="number" value="0" step="0.1" title="Height difference to add at MHWN."></td>
+                  <td></td>
+                  <td></td>
+                </tr>
+                <tr>
+                  <th>LW</th>
+                  <td><input id="secondaryLw0000" type="number" value="0" step="1" title="Minutes to add to Oban LW when Oban LW is near 0000."></td>
+                  <td><input id="secondaryLw0600" type="number" value="0" step="1" title="Minutes to add to Oban LW when Oban LW is near 0600."></td>
+                  <td><input id="secondaryLw1200" type="number" value="0" step="1" title="Minutes to add to Oban LW when Oban LW is near 1200."></td>
+                  <td><input id="secondaryLw1800" type="number" value="0" step="1" title="Minutes to add to Oban LW when Oban LW is near 1800."></td>
+                  <td></td>
+                  <td></td>
+                  <td><input id="secondaryDiffMlwn" type="number" value="0" step="0.1" title="Height difference to add at MLWN."></td>
+                  <td><input id="secondaryDiffMlws" type="number" value="0" step="0.1" title="Height difference to add at MLWS."></td>
+                </tr>
+              </tbody>
+            </table>
+          </section>
+          <label title="Optional source, year, almanac page, caveat, or note for this correction.">Notes
+            <input id="secondaryPortNotes" type="text" placeholder="source/year/notes">
+          </label>
+          <div class="secondaryActions">
+            <button id="saveSecondaryPort" type="button" title="Save this secondary-port correction table. Editing an existing port updates it.">Add secondary port</button>
+            <button id="clearSecondaryPort" type="button" title="Clear the secondary-port editor without deleting saved ports.">Clear form</button>
+          </div>
+        </section>
+        <section class="tableWrap secondaryTable">
+          <table id="secondaryPortsTable">
+            <thead>
+              <tr>
+                <th>Port</th>
+                <th>HW corrections</th>
+                <th>LW corrections</th>
+                <th>Heights</th>
+                <th>Notes</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </section>
+      </section>
+
+      <section id="settingsPanel" class="tabPanel">
+        <div class="panelHeader">
+          <div>
+            <h2>Settings</h2>
+            <p>Boat constants and local system settings for this installation.</p>
+          </div>
+        </div>
+        <section class="inputPanel settingsPanel" aria-label="Boat settings">
+          <h3>Boat settings</h3>
+          <div class="inputGrid settingsGrid">
+            <label title="Length overall. Used as a simple scale for estimated windage area and underwater area.">Boat LOA
+              <span class="inputWithUnit"><input id="loa" type="number" value="10.1" min="2" max="40" step="0.1"><span>m</span></span>
+            </label>
+            <label title="Boat draft from waterline to bottom of keel. Used for keel clearance, diagram scale, and echo-sounder conversion.">Draft
+              <span class="inputWithUnit"><input id="draft" type="number" value="1.2" min="0" max="8" step="0.1"><span>m</span></span>
+            </label>
+            <label title="Minimum acceptable depth beneath keel at low water. The app warns if the predicted low-water clearance is below this.">Minimum clearance
+              <span class="inputWithUnit"><input id="minClearance" type="number" value="0.5" min="0" max="5" step="0.1"><span>m</span></span>
+            </label>
+            <label title="Height of the bow roller above the water. Added to water depth because rode runs from seabed to bow roller, not just to the surface.">Height of bow
+              <span class="inputWithUnit"><input id="bowHeight" type="number" value="1" min="0" max="5" step="0.1"><span>m</span></span>
+            </label>
+            <label title="Total chain carried before any rope. The app draws chain first and then rope after this length.">Chain length
+              <span class="inputWithUnit"><input id="chainLength" type="number" value="50" min="0" max="200" step="1"><span>m</span></span>
+            </label>
+            <label title="Total rope carried after the chain. The app warns when rope lies on the seabed because of chafe risk.">Rope length
+              <span class="inputWithUnit"><input id="ropeLength" type="number" value="50" min="0" max="200" step="1"><span>m</span></span>
+            </label>
+            <label title="Chain diameter. Used for the editable ground-tackle settings and notes; the load model uses chain weight per metre.">Chain diameter
+              <span class="inputWithUnit"><input id="chainDiameter" type="number" value="8" min="0" max="20" step="1"><span>mm</span></span>
+            </label>
+            <label title="In-water approximation of chain weight per metre. Heavier chain increases catenary and helps keep pull more horizontal.">Chain weight
+              <span class="inputWithUnit"><input id="chainWeight" type="number" value="1.4" min="0" max="10" step="0.1"><span>kg/m</span></span>
+            </label>
+            <label title="Typical chain working load limit for this chain. Stored as a boat setting for reference; anchor holding calculations still use Anchor UHC.">Chain WLL
+              <span class="inputWithUnit"><input id="chainWll" type="number" value="800" min="0" max="10000" step="10"><span>kgf</span></span>
+            </label>
+            <label title="Typical chain breaking load for this chain. Stored as a boat setting for reference.">Chain break
+              <span class="inputWithUnit"><input id="chainBreak" type="number" value="4030" min="0" max="50000" step="10"><span>kgf</span></span>
+            </label>
+            <label title="Rope diameter. Stored as a boat setting for reference; the catenary model uses rope weight per metre.">Rope diameter
+              <span class="inputWithUnit"><input id="ropeDiameter" type="number" value="14" min="0" max="40" step="1"><span>mm</span></span>
+            </label>
+            <label title="Approximate rope weight per metre. Default is 14 mm LIROS Anchorplait nylon at about 150-175 g/m, entered as the midpoint 0.16 kg/m.">Rope weight
+              <span class="inputWithUnit"><input id="ropeWeight" type="number" value="0.16" min="0" max="2" step="0.01"><span>kg/m</span></span>
+            </label>
+            <label title="Typical rope breaking load. Default is the conservative lower end for 14 mm LIROS Anchorplait nylon, around 3,700-4,400 kg.">Rope break
+              <span class="inputWithUnit"><input id="ropeBreak" type="number" value="3700" min="0" max="50000" step="10"><span>kgf</span></span>
+            </label>
+            <label title="Anchor weight. Used only in the displayed lift-weight estimate, not as holding power.">Anchor weight
+              <span class="inputWithUnit"><input id="anchorWeight" type="number" value="15" min="0" max="100" step="1"><span>kg</span></span>
+            </label>
+            <label title="Approximate ultimate holding capacity in ideal seabed with near-horizontal pull. Real holding can be much lower in weed, rock, very soft mud, poor set, or an upward pull.">Anchor UHC
+              <span class="inputWithUnit"><input id="anchorUhc" type="number" value="420" min="0" max="10000" step="10"><span>kgf</span></span>
+            </label>
+            <label title="Estimated underwater drag area as LOA times draft times this factor. Default 0.40 is a conservative planning value for a 10.1 m Westerly Storm Cruiser with twin keels and rudder exposed to tidal stream. Reduce only if you have a better measured underwater drag estimate.">Underwater drag factor
+              <span class="inputWithUnit"><input id="underwaterDragFactor" type="number" value="0.40" min="0" max="2" step="0.05"><span>factor</span></span>
+            </label>
+            <label title="Estimated above-water windage area as LOA squared times this factor, covering hull, coachroof, sprayhood/rig allowances, and typical swinging presentation. Default 0.34 gives roughly 515 kgf at 30 kn for a 10.1 m bermudan sloop, close to conservative 33-35 ft anchoring load examples.">
+              Windage factor
+              <span class="inputWithUnit"><input id="windageFactor" type="number" value="0.34" min="0" max="2" step="0.01"><span>factor</span></span>
+            </label>
+            <label class="checkboxLabel" title="When checked, the echo reading is beneath the keel and the app adds draft to get water depth. When unchecked, the echo reading is already water depth from the surface.">
+              <input id="echoMeasuresBelowKeel" type="checkbox" checked>
+              <span>Echo sounder measures depth beneath keel</span>
+            </label>
+          </div>
+        </section>
+        <section class="inputPanel settingsPanel systemSettingsPanel" aria-label="System settings">
+          <h3>System settings</h3>
+          <div class="inputGrid settingsGrid">
+            <label title="Standard port name used for downloaded tide events.">Station name
+              <input id="tideDataStationName" type="text" value="Oban">
+            </label>
+            <label title="The prediction station is selected by AJRM Marine Location Editor.">UKHO station ID (Location Editor)
+              <input id="tideDataStationId" type="text" value="0372" inputmode="numeric" disabled>
+            </label>
+            <label title="Time standard reported by UKHO. The app treats downloaded tide events as UT.">Time standard
+              <input id="tideDataTimeStandard" type="text" value="UT">
+            </label>
+            <label title="Choose whether tide-event times, Tide tab HW/LW inputs, and the tide graph are displayed as UT or this browser's local time. Stored UKHO data remains UT.">Display times
+              <select id="tideDataDisplayMode">
+                <option value="ut">UT</option>
+                <option value="local">Local time</option>
+              </select>
+            </label>
+            <label title="Configure the account and subscription key in AJRM Marine Location Editor; Planning does not keep another copy.">UKHO account email (Location Editor)
+              <input id="tideDataAccountEmail" type="email" autocomplete="email" placeholder="Configure in Location Editor" disabled>
+            </label>
+            <label title="Configure this key once in AJRM Marine Location Editor.">UKHO API key (Location Editor)
+              <input id="tideDataApiKey" type="password" autocomplete="off" placeholder="Configure in Location Editor" disabled>
+            </label>
+          </div>
+          <div class="secondaryActions">
+            <button id="saveTideDataSettings" type="button" title="Save the display-time choice. Tidal station and credentials are managed by Location Editor.">Save display setting</button>
+            <button id="clearTideDataKey" class="dangerButton" type="button" title="Provider credentials are managed by Location Editor." disabled>Clear API key</button>
+          </div>
+        </section>
+        <section class="inputPanel settingsPanel settingsActionsPanel" aria-label="Settings actions">
+          <h3>Settings actions</h3>
+          <div class="secondaryActions">
+            <button id="saveDefaults" type="button" title="Save the current planner inputs, boat settings, and display choices as this browser's defaults.">Save settings</button>
+            <button id="resetDefaults" type="button" title="Reload the saved browser defaults, or built-in defaults if none have been saved.">Reset settings</button>
+          </div>
+        </section>
+      </section>
+
+      <section id="forcePanel" class="tabPanel">
+        <div class="panelHeader">
+          <div>
+            <h2>Wind Force</h2>
+            <p>Estimated load from windage area and wind speed squared.</p>
+          </div>
+        </div>
+        <section class="forceGrid">
+          <div class="chartPanel">
+            <svg id="forceChart" viewBox="0 0 820 320" role="img" aria-label="Wind force chart"></svg>
+          </div>
+          <section class="tableWrap">
+            <table id="forceTable">
+              <thead></thead>
+              <tbody></tbody>
+            </table>
+          </section>
+        </section>
+      </section>
+
+      <section id="formulasPanel" class="tabPanel">
+        <div class="panelHeader">
+          <div>
+            <h2>Formulas</h2>
+            <p>The core spreadsheet equations used by this app.</p>
+          </div>
+        </div>
+        <section class="formulaList">
+          <div><strong>Wind force</strong><code>0.0165 * (LOA^2 * windageFactor) * windSpeed^2</code></div>
+          <div><strong>Depth now</strong><code>chartedDepth + tideRiseNow</code></div>
+          <div><strong>Measured depth now</strong><code>echoReading + draft when sounder is below-keel</code></div>
+          <div><strong>Keel clearance</strong><code>selectedDepth - draft</code></div>
+          <div><strong>Tidal-stream load</strong><code>13.2 * LOA * draft * underwaterDragFactor * tidalStream^2</code></div>
+          <div><strong>HW-set rode</strong><code>chosenRodeLength</code></div>
+          <div><strong>Displayed scope</strong><code>rodeLength / (selectedDepth + bowHeight)</code></div>
+          <div><strong>Amount on seabed</strong><code>min(rodeLength, chainLength + ropeLength) - selectedDepth - bowHeight</code></div>
+          <div><strong>Estimated catenary</strong><code>chain and rope solved as separate catenary sections from anchor to bow</code></div>
+          <div><strong>Anchor drag check</strong><code>horizontalLoad &lt; anchorUHC * angleHoldingFactor(HW pull angle)</code></div>
+          <div><strong>Rope on seabed at LW</strong><code>lowWater catenary surplus rope lying on seabed</code></div>
+          <div><strong>Weight to lift</strong><code>anchorWeight + liftedChain * chainWeight + liftedRope * ropeWeight</code></div>
+        </section>
+      </section>
+
+      <section id="aboutPanel" class="tabPanel">
+        <div class="panelHeader">
+          <div>
+            <h2>About</h2>
+            <p>Version details for checking the app running on this machine.</p>
+          </div>
+        </div>
+        <section class="aboutGrid" aria-label="App version details">
+          <div title="Version of the browser files currently loaded."><span>Web version</span><strong id="webVersion">-</strong></div>
+          <div title="Version reported by the local Node server. If this differs from Web version, restart the server."><span>Server version</span><strong id="serverVersion">-</strong></div>
+          <div title="Address and port reported by the local server. Use this host and port from an iPad on the same network."><span>Server address</span><strong id="serverAddress">-</strong></div>
+          <div title="When the local server process started. If this predates a git pull, restart the server."><span>Server started</span><strong id="serverStarted">-</strong></div>
+        </section>
+        <section class="serviceHelp" aria-label="Server service commands">
+          <h3>Server Control On Lubuntu</h3>
+          <p>Use the desktop Start/Stop icons, or run these user-service commands in a terminal:</p>
+          <code>systemctl --user start anchor-force-planner</code>
+          <code>systemctl --user stop anchor-force-planner</code>
+          <code>systemctl --user status anchor-force-planner</code>
+          <code>journalctl --user -u anchor-force-planner -f</code>
+        </section>
+      </section>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>

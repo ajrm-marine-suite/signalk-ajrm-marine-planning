@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>AJRM Marine Planning</title>
+  <link rel="stylesheet" href="suite.css">
+</head>
+<body>
+  <header>
+    <div><strong>AJRM Marine Planning</strong><span>Shared locations, tides and weather</span></div>
+    <nav aria-label="Planner selection">
+      <button class="active" type="button" data-view="gate">Gate Passage</button>
+      <button type="button" data-view="anchor">Anchor Force</button>
+    </nav>
+  </header>
+  <main><iframe id="planner" title="Gate Passage Planner" src="gate/index.html"></iframe></main>
+  <script src="suite.js"></script>
+</body>
+</html>

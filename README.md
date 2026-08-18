@@ -1,0 +1,34 @@
+# AJRM Marine Planning
+
+AJRM Marine Planning is one Signal K plugin with two related views:
+
+- **Gate Passage** combines a forecast, UKHO tidal events and editable local
+  tidal-stream constants to compare candidate transit hours.
+- **Anchor Force** checks depth, clearance, scope, wind/current load, catenary,
+  rode composition and anchor holding assumptions.
+
+The plugin deliberately does not own another weather feed, tide subscription or
+location database. Enable and configure **AJRM Marine Location Editor** first;
+Planning consumes its `app.ajrmMarineLocations`, `app.ajrmMarineTides` and
+`app.ajrmMarineWeather` contracts. Configure the UKHO subscription key and its
+caching tier in Location Editor. Discovery-tier UKHO data is not persisted.
+
+Open **AJRM Marine Planning** from the Signal K webapps list and switch between
+the two planners using the buttons in the header. Calculation constants and
+manual overrides persist in Planning's Signal K data directory.
+
+## Safety
+
+These are planning aids, not navigation or anchoring authorities. Forecasts,
+tidal predictions, stream models, seabed descriptions and vessel assumptions
+can be incomplete or wrong. Cross-check current official sources and observed
+conditions. For anchoring, separately check high-water loading/scope and
+low-water clearance. The skipper remains responsible for every decision.
+
+## Migration
+
+The first integrated release carries forward the proven calculator models and
+their editable gate/secondary-port constants. It intentionally removes their
+standalone provider caches and stored UKHO keys. Do not retire the standalone
+apps until both integrated views have been checked aboard or against known
+examples.

@@ -1,0 +1,418 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Passage Planner</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <h1>Gate Passage Planner</h1>
+        <p id="locationLabel">Cuan Sound</p>
+      </div>
+      <div class="topActions">
+        <button id="refreshWeather" type="button">Refresh weather</button>
+        <button id="refreshTides" type="button">Refresh tides</button>
+        <button id="refreshAll" type="button">Refresh all</button>
+      </div>
+    </header>
+
+    <main>
+      <section class="safetyNotice" aria-label="Safety notice">
+        <strong>Planning aid—not a navigation authority.</strong>
+        <span id="safetyDetail">Forecasts, tidal predictions and modelled stream rates can be wrong. Cross-check current charts, official predictions, forecasts and observed conditions; the skipper remains responsible for the passage decision.</span>
+      </section>
+
+      <nav class="tabs" aria-label="Planner tabs">
+        <button class="tabButton active" type="button" data-tab="plan">Passage Plan</button>
+        <button class="tabButton" type="button" data-tab="hourView">Hour View</button>
+        <button class="tabButton" type="button" data-tab="gateCalcs">Tidal Gate Calculations</button>
+        <button class="tabButton" type="button" data-tab="weatherData">Fetched Weather</button>
+        <button class="tabButton" type="button" data-tab="tideData">Fetched Tide Data</button>
+        <button class="tabButton" type="button" data-tab="beaufort">Beaufort</button>
+        <button class="tabButton" type="button" data-tab="location">Location Constants</button>
+        <button class="tabButton" type="button" data-tab="constants">Constants</button>
+        <button class="tabButton" type="button" data-tab="about">About</button>
+      </nav>
+
+      <section id="planPanel" class="tabPanel active">
+        <section class="controls" aria-label="Passage inputs">
+          <label>Tidal gate
+            <select id="gate">
+              <option>Corryvreckan</option>
+              <option selected>Cuan Sound</option>
+              <option>Dorus Mor</option>
+              <option>Sound of Luing</option>
+            </select>
+          </label>
+          <label class="directionReadout">Tide set
+            <output id="gateDirections" aria-live="polite">Flood W / Ebb E</output>
+          </label>
+          <label id="courseControl"><span class="labelText">Course<span class="helpIcon" tabindex="0" aria-label="Planned course over the ground, used to compare the boat with wind and tidal stream directions. It affects point of sail, fair/foul tide, SOG, CTS, and gust penalties." title="Planned course over the ground, used to compare the boat with wind and tidal stream directions. It affects point of sail, fair/foul tide, SOG, CTS, and gust penalties.">?</span></span>
+            <select id="heading">
+              <option value="0">N</option>
+              <option value="22.5">NNE</option>
+              <option value="45">NE</option>
+              <option value="67.5">ENE</option>
+              <option value="90">E</option>
+              <option value="112.5">ESE</option>
+              <option value="135">SE</option>
+              <option value="157.5">SSE</option>
+              <option value="180">S</option>
+              <option value="202.5">SSW</option>
+              <option value="225">SW</option>
+              <option value="247.5">WSW</option>
+              <option value="270" selected>W</option>
+              <option value="292.5">WNW</option>
+              <option value="315">NW</option>
+              <option value="337.5">NNW</option>
+            </select>
+            <small id="courseWarning" class="controlWarning"></small>
+          </label>
+          <label><span class="labelText">Yacht speed (kn)<span class="helpIcon" tabindex="0" aria-label="Assumed boat speed through the water before tide is applied. The planner combines this with the tidal stream to estimate speed over ground and course to steer." title="Assumed boat speed through the water before tide is applied. The planner combines this with the tidal stream to estimate speed over ground and course to steer.">?</span></span>
+            <input id="speed" type="number" value="5" min="1" max="12" step="0.1">
+          </label>
+          <label><span class="labelText">Crew capability<span class="helpIcon" tabindex="0" aria-label="Selects a comfort profile. Family lowers steady-wind, gust, wave, and foul-tide thresholds; Racing raises them; Competent Crew uses the base constants shown on the Constants tab." title="Selects a comfort profile. Family lowers steady-wind, gust, wave, and foul-tide thresholds; Racing raises them; Competent Crew uses the base constants shown on the Constants tab.">?</span></span>
+            <select id="crewCapability">
+              <option value="family">Family with young children</option>
+              <option value="competent" selected>Competent Crew</option>
+              <option value="racing">Racing Crew</option>
+            </select>
+          </label>
+        </section>
+
+        <section class="summary" aria-label="Summary">
+          <div><span>Max gust</span><strong id="maxGust">-</strong></div>
+          <div><span>Max wave</span><strong id="maxWave">-</strong></div>
+          <div><span>Worst SOG</span><strong id="worstSog">-</strong></div>
+          <div><span>Usable window</span><strong id="usable">-</strong></div>
+          <div><span>No-go</span><strong id="nogo">-</strong></div>
+        </section>
+
+        <section class="freshnessGrid" aria-label="Data freshness">
+          <div id="selectedLocationStatus" class="freshnessCard locationCard">
+            <span>Selected location</span>
+            <strong>Cuan Sound</strong>
+            <small>-</small>
+          </div>
+          <div id="weatherFreshness" class="freshnessCard">
+            <span>Weather web update</span>
+            <strong>No web update yet</strong>
+            <small>-</small>
+          </div>
+          <div id="tideFreshness" class="freshnessCard">
+            <span>Tide web update</span>
+            <strong>No web update yet</strong>
+            <small>-</small>
+          </div>
+          <div id="planningHorizon" class="freshnessCard">
+            <span>Planning horizon</span>
+            <strong>-</strong>
+            <small>Limited by tide data</small>
+          </div>
+        </section>
+
+        <p id="dataStatus" class="dataStatus">No provider data has been loaded yet.</p>
+
+        <section class="tableWrap planTableWrap" aria-label="Processed passage plan">
+          <table id="planTable">
+            <thead></thead>
+            <tbody></tbody>
+          </table>
+        </section>
+      </section>
+
+      <section id="hourViewPanel" class="tabPanel">
+        <div class="panelHeader">
+          <div>
+            <h2>Hour View</h2>
+            <p>One-hour vector view of boat, tide, wind, wind waves, and swell. This planner remains untested and not for navigation.</p>
+          </div>
+          <div class="hourPicker">
+            <button id="previousHour" type="button" aria-label="Previous hour">Previous</button>
+            <label class="hourSelectLabel">Hour
+              <select id="hourSelect"></select>
+            </label>
+            <button id="nextHour" type="button" aria-label="Next hour">Next</button>
+          </div>
+        </div>
+        <section class="hourViewGrid" aria-label="Selected hour visual overview">
+          <div class="vectorPanel">
+            <svg id="hourCompass" viewBox="0 0 420 420" role="img" aria-label="Circular vector display for selected hour"></svg>
+          </div>
+          <div>
+            <div id="hourOverall" class="hourOverall">-</div>
+            <section id="hourCards" class="hourCards" aria-label="Selected hour readings"></section>
+          </div>
+        </section>
+      </section>
+
+      <section id="gateCalcsPanel" class="tabPanel">
+        <div class="panelHeader">
+          <div>
+            <h2>Tidal Gate Calculations</h2>
+            <p>Calculated tidal gate windows used by the passage plan. This is read-only; edit source constants on the Location Constants tab.</p>
+          </div>
+        </div>
+        <section class="tableWrap inputTableWrap" aria-label="Tidal gate calculations">
+          <table id="gateCalcTable">
+            <thead></thead>
+            <tbody></tbody>
+          </table>
+        </section>
+      </section>
+
+      <section id="weatherDataPanel" class="tabPanel">
+        <div class="panelHeader">
+          <div>
+            <h2>Fetched Weather</h2>
+            <p>Weather and marine rows from the current provider/cache, before tidal-gate calculations are applied.</p>
+          </div>
+        </div>
+        <section class="tableWrap inputTableWrap" aria-label="Fetched weather data">
+          <table id="weatherDataTable">
+            <thead></thead>
+            <tbody></tbody>
+          </table>
+        </section>
+      </section>
+
+      <section id="tideDataPanel" class="tabPanel">
+        <div class="panelHeader">
+          <div>
+            <h2>Fetched Tide Data</h2>
+            <p>High-water tide rows from the source/cache, before location constants are applied.</p>
+          </div>
+        </div>
+        <section class="tableWrap inputTableWrap" aria-label="Fetched tide data">
+          <table id="fetchedTideTable">
+            <thead></thead>
+            <tbody></tbody>
+          </table>
+        </section>
+      </section>
+
+      <section id="beaufortPanel" class="tabPanel">
+        <div class="panelHeader">
+          <div>
+            <h2>Beaufort</h2>
+            <p>Read-only wind force conversion table used by the planner.</p>
+          </div>
+        </div>
+        <section class="tableWrap inputTableWrap" aria-label="Beaufort wind conversion table">
+          <table id="beaufortTable">
+            <thead></thead>
+            <tbody></tbody>
+          </table>
+        </section>
+      </section>
+
+      <section id="constantsPanel" class="tabPanel">
+        <div class="panelHeader">
+          <div>
+            <h2>Constants</h2>
+            <p>Boat and calculation settings. Changes recalculate the current plan without downloading new data.</p>
+          </div>
+        </div>
+        <section class="constantsGrid" aria-label="Editable constants">
+          <label><span class="labelText">Slack threshold (kn)<span class="helpIcon" tabindex="0" aria-label="Tide rates below this value are treated as slack water. Increase it to make the planner more conservative around weak streams." title="Tide rates below this value are treated as slack water. Increase it to make the planner more conservative around weak streams.">?</span></span>
+            <input id="slack" type="number" value="1" min="0" max="4" step="0.1">
+          </label>
+          <label><span class="labelText">LWL (m)<span class="helpIcon" tabindex="0" aria-label="Loaded waterline length of the boat. Kept visible because wave encounter and hobby-horsing checks are boat-specific, even where the current model mainly uses encounter period." title="Loaded waterline length of the boat. Kept visible because wave encounter and hobby-horsing checks are boat-specific, even where the current model mainly uses encounter period.">?</span></span>
+            <input id="lwl" type="number" value="8.23" min="4" max="30" step="0.01">
+          </label>
+          <label><span class="labelText">Displacement (kg)<span class="helpIcon" tabindex="0" aria-label="Your boat displacement. Wave-height comfort thresholds are scaled against the reference displacement, so a heavier boat is treated as tolerating slightly larger seas." title="Your boat displacement. Wave-height comfort thresholds are scaled against the reference displacement, so a heavier boat is treated as tolerating slightly larger seas.">?</span></span>
+            <input id="displacement" type="number" value="5604" min="500" max="30000" step="1">
+          </label>
+          <label><span class="labelText">UKHO API key (Location Editor)<span class="helpIcon" tabindex="0" aria-label="The shared tide service and API key are configured in AJRM Marine Location Editor. This planner does not store another copy." title="The shared tide service and API key are configured in AJRM Marine Location Editor. This planner does not store another copy.">?</span></span>
+            <input id="ukhoApiKey" type="password" autocomplete="off" placeholder="Configure in Location Editor" disabled>
+          </label>
+          <label><span class="labelText">UKHO account email (Location Editor)<span class="helpIcon" tabindex="0" aria-label="Configure the ADMIRALTY account and key once in AJRM Marine Location Editor." title="Configure the ADMIRALTY account and key once in AJRM Marine Location Editor.">?</span></span>
+            <input id="ukhoAccountEmail" type="email" autocomplete="email" placeholder="Configure in Location Editor" disabled>
+          </label>
+          <label><span class="labelText">Base tide station<span class="helpIcon" tabindex="0" aria-label="Reference tide station used for high and low water heights and times. The tidal gate constants then offset from this station to local gate stream timings." title="Reference tide station used for high and low water heights and times. The tidal gate constants then offset from this station to local gate stream timings.">?</span></span>
+            <input id="baseTideStationName" type="text" value="Oban" disabled>
+          </label>
+          <label><span class="labelText">UKHO station ID<span class="helpIcon" tabindex="0" aria-label="UKHO station number for the base tide station. Oban is currently 0372. Changing this affects future tide downloads and the cached tide file key." title="UKHO station number for the base tide station. Oban is currently 0372. Changing this affects future tide downloads and the cached tide file key.">?</span></span>
+            <input id="baseTideStationId" type="text" value="0372" inputmode="numeric" disabled>
+          </label>
+          <label><span class="labelText">Tide time standard<span class="helpIcon" tabindex="0" aria-label="Time zone standard reported by the tide source. UKHO tidal event times here are treated as UT, and screen headings say UT or BST where relevant." title="Time zone standard reported by the tide source. UKHO tidal event times here are treated as UT, and screen headings say UT or BST where relevant.">?</span></span>
+            <input id="baseTideTimeStandard" type="text" value="UT" readonly>
+          </label>
+          <label><span class="labelText">Oban MHWS (m)<span class="helpIcon" tabindex="0" aria-label="Mean High Water Springs at the base station. Used with MLWS to estimate the spring range. Because this is a mean, real tides can exceed it and % Spring is deliberately not capped at 100%." title="Mean High Water Springs at the base station. Used with MLWS to estimate the spring range. Because this is a mean, real tides can exceed it and % Spring is deliberately not capped at 100%.">?</span></span>
+            <input id="obanMhws" type="number" value="4.00" step="0.01">
+          </label>
+          <label><span class="labelText">Oban MHWN (m)<span class="helpIcon" tabindex="0" aria-label="Mean High Water Neaps at the base station. Used with MLWN to estimate the neap range. % Spring is calculated from the observed event range between these mean neap and spring ranges." title="Mean High Water Neaps at the base station. Used with MLWN to estimate the neap range. % Spring is calculated from the observed event range between these mean neap and spring ranges.">?</span></span>
+            <input id="obanMhwn" type="number" value="2.90" step="0.01">
+          </label>
+          <label><span class="labelText">Oban MLWN (m)<span class="helpIcon" tabindex="0" aria-label="Mean Low Water Neaps at the base station. Combined with MHWN to produce the reference neap range used for % Spring." title="Mean Low Water Neaps at the base station. Combined with MHWN to produce the reference neap range used for % Spring.">?</span></span>
+            <input id="obanMlwn" type="number" value="1.80" step="0.01">
+          </label>
+          <label><span class="labelText">Oban MLWS (m)<span class="helpIcon" tabindex="0" aria-label="Mean Low Water Springs at the base station. Combined with MHWS to produce the reference spring range used for % Spring." title="Mean Low Water Springs at the base station. Combined with MHWS to produce the reference spring range used for % Spring.">?</span></span>
+            <input id="obanMlws" type="number" value="0.70" step="0.01">
+          </label>
+          <label><span class="labelText">Fallback cycle (hours)<span class="helpIcon" tabindex="0" aria-label="Used only at the end of the tide table when there is no following flood commencement row. It gives the active tidal gate a final search window so the last weather hours can still match a tide segment." title="Used only at the end of the tide table when there is no following flood commencement row. It gives the active tidal gate a final search window so the last weather hours can still match a tide segment.">?</span></span>
+            <input id="fallbackCycleHours" type="number" value="12.5" min="1" step="0.1">
+          </label>
+          <label><span class="labelText">Fallback ebb duration (hours)<span class="helpIcon" tabindex="0" aria-label="Used only when calculating the final ebb curve and there is no next flood start available. The planner assumes this many hours from ebb start back to slack/flood so it can draw the last sine curve." title="Used only when calculating the final ebb curve and there is no next flood start available. The planner assumes this many hours from ebb start back to slack/flood so it can draw the last sine curve.">?</span></span>
+            <input id="fallbackEbbHours" type="number" value="6.2" min="1" step="0.1">
+          </label>
+          <label><span class="labelText">Peak ebb offset (min)<span class="helpIcon" tabindex="0" aria-label="Displayed peak ebb time is estimated this many minutes after ebb commences. It is a presentation/calculation assumption for the gate table, not a web provider value." title="Displayed peak ebb time is estimated this many minutes after ebb commences. It is a presentation/calculation assumption for the gate table, not a web provider value.">?</span></span>
+            <input id="peakEbbOffsetMinutes" type="number" value="180" min="0" step="5">
+          </label>
+          <label><span class="labelText">Peak flow minimum (kn)<span class="helpIcon" tabindex="0" aria-label="Lower bound for estimated peak tidal stream. This prevents very small calculated ranges from producing an unrealistically tiny stream in the planner." title="Lower bound for estimated peak tidal stream. This prevents very small calculated ranges from producing an unrealistically tiny stream in the planner.">?</span></span>
+            <input id="peakFlowMinimumKn" type="number" value="0.5" min="0" step="0.1">
+          </label>
+          <label><span class="labelText">Knots to m/s<span class="helpIcon" tabindex="0" aria-label="Conversion used when comparing boat speed with wave phase speed for encounter-period calculations. Standard value is about 0.5144 metres per second per knot." title="Conversion used when comparing boat speed with wave phase speed for encounter-period calculations. Standard value is about 0.5144 metres per second per knot.">?</span></span>
+            <input id="knotsToMs" type="number" value="0.5144" min="0" step="0.0001">
+          </label>
+          <label><span class="labelText">Gravity (m/s2)<span class="helpIcon" tabindex="0" aria-label="Acceleration due to gravity used in the deep-water wave speed approximation for encounter period. Standard value is 9.81 m/s2." title="Acceleration due to gravity used in the deep-water wave speed approximation for encounter period. Standard value is 9.81 m/s2.">?</span></span>
+            <input id="gravityMs2" type="number" value="9.81" min="0" step="0.01">
+          </label>
+          <label><span class="labelText">Reference displacement (kg)<span class="helpIcon" tabindex="0" aria-label="Baseline boat displacement used to scale wave comfort thresholds. If your displacement equals this value, the listed wave thresholds apply exactly." title="Baseline boat displacement used to scale wave comfort thresholds. If your displacement equals this value, the listed wave thresholds apply exactly.">?</span></span>
+            <input id="displacementReferenceKg" type="number" value="5604" min="1" step="1">
+          </label>
+          <label><span class="labelText">Resonance min Te (s)<span class="helpIcon" tabindex="0" aria-label="Lower bound of encounter period treated as a hobby-horsing resonance risk. Te is the wave period as experienced by the moving boat, not just the forecast wave period." title="Lower bound of encounter period treated as a hobby-horsing resonance risk. Te is the wave period as experienced by the moving boat, not just the forecast wave period.">?</span></span>
+            <input id="resonanceMinSeconds" type="number" value="1.8" min="0" step="0.1">
+          </label>
+          <label><span class="labelText">Resonance max Te (s)<span class="helpIcon" tabindex="0" aria-label="Upper bound of encounter period treated as a hobby-horsing resonance risk. Wider bounds make the warning more sensitive." title="Upper bound of encounter period treated as a hobby-horsing resonance risk. Wider bounds make the warning more sensitive.">?</span></span>
+            <input id="resonanceMaxSeconds" type="number" value="3.2" min="0" step="0.1">
+          </label>
+          <label><span class="labelText">Resonance wave minimum (m)<span class="helpIcon" tabindex="0" aria-label="Minimum individual wave or swell height before the resonance warning is allowed to trigger. This avoids hobby-horsing warnings for tiny ripples with the right period." title="Minimum individual wave or swell height before the resonance warning is allowed to trigger. This avoids hobby-horsing warnings for tiny ripples with the right period.">?</span></span>
+            <input id="resonanceMinWaveM" type="number" value="0.4" min="0" step="0.1">
+          </label>
+          <label><span class="labelText">Hobby-horsing multiplier<span class="helpIcon" tabindex="0" aria-label="When resonance is detected, combined sea height is multiplied by this value before comfort is rated. It is a perceived severity adjustment." title="When resonance is detected, combined sea height is multiplied by this value before comfort is rated. It is a perceived severity adjustment.">?</span></span>
+            <input id="hobbyHorsingMultiplier" type="number" value="1.3" min="1" step="0.1">
+          </label>
+          <label><span class="labelText">Tide steepening per knot<span class="helpIcon" tabindex="0" aria-label="Sea-height multiplier added per knot only when the tidal stream opposes the forecast wave or swell direction. This is a simple current-steepening approximation, not a full wave model." title="Sea-height multiplier added per knot only when the tidal stream opposes the forecast wave or swell direction. This is a simple current-steepening approximation, not a full wave model.">?</span></span>
+            <input id="tideWaveSteepeningPerKn" type="number" value="0.03" min="0" step="0.01">
+          </label>
+          <label><span class="labelText">Max tide steepening<span class="helpIcon" tabindex="0" aria-label="Maximum extra sea-height multiplier when tide opposes forecast wave or swell direction. A value of 0.25 means the tide can add at most 25% to perceived sea height." title="Maximum extra sea-height multiplier when tide opposes forecast wave or swell direction. A value of 0.25 means the tide can add at most 25% to perceived sea height.">?</span></span>
+            <input id="tideWaveSteepeningMax" type="number" value="0.25" min="0" step="0.01">
+          </label>
+          <label><span class="labelText">Beating strenuous wave (m)<span class="helpIcon" tabindex="0" aria-label="Combined wave and swell height that becomes strenuous when beating, before displacement scaling. Beating is more sensitive because the boat is meeting the sea more directly." title="Combined wave and swell height that becomes strenuous when beating, before displacement scaling. Beating is more sensitive because the boat is meeting the sea more directly.">?</span></span>
+            <input id="beatingStrenuousWaveM" type="number" value="0.6" min="0" step="0.1">
+          </label>
+          <label><span class="labelText">Beating dangerous wave (m)<span class="helpIcon" tabindex="0" aria-label="Combined wave and swell height that becomes dangerous when beating, before displacement scaling." title="Combined wave and swell height that becomes dangerous when beating, before displacement scaling.">?</span></span>
+            <input id="beatingDangerousWaveM" type="number" value="1.5" min="0" step="0.1">
+          </label>
+          <label><span class="labelText">Offwind strenuous wave (m)<span class="helpIcon" tabindex="0" aria-label="Combined wave and swell height that becomes strenuous when not beating, before displacement scaling. This covers close reach, beam reach, broad reach, and running in the current simplified model." title="Combined wave and swell height that becomes strenuous when not beating, before displacement scaling. This covers close reach, beam reach, broad reach, and running in the current simplified model.">?</span></span>
+            <input id="offwindStrenuousWaveM" type="number" value="1.8" min="0" step="0.1">
+          </label>
+          <label><span class="labelText">Offwind dangerous wave (m)<span class="helpIcon" tabindex="0" aria-label="Combined wave and swell height that becomes dangerous when not beating, before displacement scaling." title="Combined wave and swell height that becomes dangerous when not beating, before displacement scaling.">?</span></span>
+            <input id="offwindDangerousWaveM" type="number" value="2.8" min="0" step="0.1">
+          </label>
+          <label><span class="labelText">Beating acceptable Bft<span class="helpIcon" tabindex="0" aria-label="When beating, this Beaufort force or above is rated Acceptable rather than Pleasant, unless it also reaches the strenuous or dangerous thresholds." title="When beating, this Beaufort force or above is rated Acceptable rather than Pleasant, unless it also reaches the strenuous or dangerous thresholds.">?</span></span>
+            <input id="beatingAcceptableBft" type="number" value="4" min="0" max="12" step="1">
+          </label>
+          <label><span class="labelText">Beating strenuous Bft<span class="helpIcon" tabindex="0" aria-label="When beating, this Beaufort force or above is rated Strenuous unless it also reaches the dangerous threshold." title="When beating, this Beaufort force or above is rated Strenuous unless it also reaches the dangerous threshold.">?</span></span>
+            <input id="beatingStrenuousBft" type="number" value="5" min="0" max="12" step="1">
+          </label>
+          <label><span class="labelText">Beating dangerous Bft<span class="helpIcon" tabindex="0" aria-label="When beating, this Beaufort force or above is rated Dangerous. It feeds directly into the Overall rating." title="When beating, this Beaufort force or above is rated Dangerous. It feeds directly into the Overall rating.">?</span></span>
+            <input id="beatingDangerousBft" type="number" value="6" min="0" max="12" step="1">
+          </label>
+          <label><span class="labelText">Offwind strenuous Bft<span class="helpIcon" tabindex="0" aria-label="On close reach, beam reach, broad reach, or running, this Beaufort force or above is rated Strenuous unless it also reaches the dangerous threshold." title="On close reach, beam reach, broad reach, or running, this Beaufort force or above is rated Strenuous unless it also reaches the dangerous threshold.">?</span></span>
+            <input id="offwindStrenuousBft" type="number" value="7" min="0" max="12" step="1">
+          </label>
+          <label><span class="labelText">Offwind dangerous Bft<span class="helpIcon" tabindex="0" aria-label="On close reach, beam reach, broad reach, or running, this Beaufort force or above is rated Dangerous." title="On close reach, beam reach, broad reach, or running, this Beaufort force or above is rated Dangerous.">?</span></span>
+            <input id="offwindDangerousBft" type="number" value="8" min="0" max="12" step="1">
+          </label>
+          <label><span class="labelText">Strong foul ratio<span class="helpIcon" tabindex="0" aria-label="If tide-adjusted speed over ground on course falls below this fraction of boat speed, the tide rating becomes Strong Foul. For example, 0.4 means less than 40% of normal progress." title="If tide-adjusted speed over ground on course falls below this fraction of boat speed, the tide rating becomes Strong Foul. For example, 0.4 means less than 40% of normal progress.">?</span></span>
+            <input id="strongFoulRatio" type="number" value="0.4" min="0" max="1" step="0.05">
+          </label>
+          <label><span class="labelText">Gust base limit (kn)<span class="helpIcon" tabindex="0" aria-label="Baseline maximum forecast gust before contextual penalties are applied. The default 30 kn represents ideal sheltered/downwind planning conditions for this boat model." title="Baseline maximum forecast gust before contextual penalties are applied. The default 30 kn represents ideal sheltered/downwind planning conditions for this boat model.">?</span></span>
+            <input id="gustBaseLimitKn" type="number" value="30" min="0" step="1">
+          </label>
+          <label><span class="labelText">Gust beating penalty (kn)<span class="helpIcon" tabindex="0" aria-label="Deducted from the gust no-go limit when beating. This accounts for increased apparent wind and harder boat handling." title="Deducted from the gust no-go limit when beating. This accounts for increased apparent wind and harder boat handling.">?</span></span>
+            <input id="gustBeatingPenaltyKn" type="number" value="5" min="0" step="1">
+          </label>
+          <label><span class="labelText">Gust beam penalty (kn)<span class="helpIcon" tabindex="0" aria-label="Deducted from the gust no-go limit on close or beam reach. Broad reach and running use no point-of-sail gust penalty." title="Deducted from the gust no-go limit on close or beam reach. Broad reach and running use no point-of-sail gust penalty.">?</span></span>
+            <input id="gustBeamPenaltyKn" type="number" value="2" min="0" step="1">
+          </label>
+          <label><span class="labelText">Exposed sea height (m)<span class="helpIcon" tabindex="0" aria-label="Combined forecast wave/swell height at or above this value is treated as exposed/large-fetch sea state for the gust no-go calculation." title="Combined forecast wave/swell height at or above this value is treated as exposed/large-fetch sea state for the gust no-go calculation.">?</span></span>
+            <input id="gustExposedWaveHeightM" type="number" value="1.0" min="0" step="0.1">
+          </label>
+          <label><span class="labelText">Exposed sea penalty (kn)<span class="helpIcon" tabindex="0" aria-label="Deducted from the gust no-go limit when forecast combined wave/swell height indicates exposed sea state. This replaces any attempt to infer onshore/offshore wind." title="Deducted from the gust no-go limit when forecast combined wave/swell height indicates exposed sea state. This replaces any attempt to infer onshore/offshore wind.">?</span></span>
+            <input id="gustExposedFetchPenaltyKn" type="number" value="4" min="0" step="1">
+          </label>
+          <label><span class="labelText">Wind-over-tide penalty (kn)<span class="helpIcon" tabindex="0" aria-label="Deducted from the gust no-go limit when wind direction opposes a moderate tidal stream." title="Deducted from the gust no-go limit when wind direction opposes a moderate tidal stream.">?</span></span>
+            <input id="gustWindOverTidePenaltyKn" type="number" value="4" min="0" step="1">
+          </label>
+          <label><span class="labelText">Major gate penalty (kn)<span class="helpIcon" tabindex="0" aria-label="Deducted instead of the moderate wind-over-tide penalty when the opposing stream is at or above the major-gate tide threshold." title="Deducted instead of the moderate wind-over-tide penalty when the opposing stream is at or above the major-gate tide threshold.">?</span></span>
+            <input id="gustMajorGatePenaltyKn" type="number" value="7" min="0" step="1">
+          </label>
+          <label><span class="labelText">Major gate tide (kn)<span class="helpIcon" tabindex="0" aria-label="Absolute tidal stream speed that makes a wind-over-tide situation count as a major tidal gate/springs case for gust no-go calculation." title="Absolute tidal stream speed that makes a wind-over-tide situation count as a major tidal gate/springs case for gust no-go calculation.">?</span></span>
+            <input id="gustMajorGateTideKn" type="number" value="3.0" min="0" step="0.1">
+          </label>
+          <label><span class="labelText">Wind chill temp limit (C)<span class="helpIcon" tabindex="0" aria-label="Wind chill is only calculated below this air temperature. Above it, the displayed chill simply rounds the forecast air temperature." title="Wind chill is only calculated below this air temperature. Above it, the displayed chill simply rounds the forecast air temperature.">?</span></span>
+            <input id="windChillTempLimitC" type="number" value="10" step="0.5">
+          </label>
+          <label><span class="labelText">Wind chill wind limit (km/h)<span class="helpIcon" tabindex="0" aria-label="Wind chill is only calculated when converted wind speed is at least this value. Below it, the displayed chill simply rounds the forecast air temperature." title="Wind chill is only calculated when converted wind speed is at least this value. Below it, the displayed chill simply rounds the forecast air temperature.">?</span></span>
+            <input id="windChillWindLimitKmh" type="number" value="4.8" min="0" step="0.1">
+          </label>
+          <label><span class="labelText">Knots to km/h<span class="helpIcon" tabindex="0" aria-label="Conversion used only by the wind-chill formula, which expects wind speed in kilometres per hour. Standard value is 1.852 km/h per knot." title="Conversion used only by the wind-chill formula, which expects wind speed in kilometres per hour. Standard value is 1.852 km/h per knot.">?</span></span>
+            <input id="knotsToKmh" type="number" value="1.852" min="0" step="0.001">
+          </label>
+          <div class="constantActions">
+            <button id="saveSettings" type="button">Save settings</button>
+            <p id="settingsStatus" class="dataStatus">Shared tide service not checked yet.</p>
+          </div>
+        </section>
+        <section class="tableWrap inputTableWrap comfortConstantsWrap" aria-label="Crew comfort constants">
+          <table id="comfortConstantsTable">
+            <thead></thead>
+            <tbody></tbody>
+          </table>
+        </section>
+      </section>
+
+      <section id="locationPanel" class="tabPanel">
+        <div class="panelHeader">
+          <div>
+            <h2>Location Constants</h2>
+            <p>Spring/neap timing constants for each tidal gate. Changes recalculate the tide windows without downloading new data.</p>
+          </div>
+          <div class="panelActions">
+            <button id="addLocation" type="button">Add location</button>
+            <button id="loadLocationConstants" type="button">Load</button>
+            <button id="saveLocationConstants" type="button">Save</button>
+          </div>
+        </div>
+        <p id="locationConstantsStatus" class="dataStatus">Location constants are currently in memory only.</p>
+        <section class="tableWrap inputTableWrap" aria-label="Editable location constants">
+          <table id="locationTable">
+            <thead></thead>
+            <tbody></tbody>
+          </table>
+        </section>
+      </section>
+
+      <section id="aboutPanel" class="tabPanel">
+        <div class="panelHeader">
+          <div>
+            <h2>About</h2>
+            <p>Version and server-control details for this local planner.</p>
+          </div>
+        </div>
+        <section class="aboutGrid" aria-label="App version details">
+          <div title="Version of the browser files currently loaded."><span>Web version</span><strong id="webVersion">-</strong></div>
+          <div title="Version reported by the local Node server. If this differs from Web version, restart the server."><span>Server version</span><strong id="serverVersion">-</strong></div>
+          <div title="Address and port reported by the local server. Use this host and port from an iPad on the same network."><span>Server address</span><strong id="serverAddress">-</strong></div>
+          <div title="When the local server process started. If this predates a git pull, restart the server."><span>Server started</span><strong id="serverStarted">-</strong></div>
+        </section>
+        <section class="serviceHelp" aria-label="Server service commands">
+          <h3>Server Control On Lubuntu</h3>
+          <p>Use the desktop Start/Stop icons, or run these user-service commands in a terminal:</p>
+          <code>systemctl --user start gate-passage-planner</code>
+          <code>systemctl --user stop gate-passage-planner</code>
+          <code>systemctl --user status gate-passage-planner</code>
+          <code>journalctl --user -u gate-passage-planner -f</code>
+        </section>
+      </section>
+    </main>
+
+    <script type="module" src="app.js"></script>
+  </body>
+</html>
