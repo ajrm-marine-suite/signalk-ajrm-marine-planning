@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.4 - 2026-08-18
+
+- Consume Oban-linked secondary-port correction records from Location Editor.
+- Remove Planning's duplicate Secondary Ports editor and bundled correction
+  table; submitted state can no longer overwrite the authoritative locations.
+- Retain stable selection IDs through the Location Editor migration adapter.
+- Keep corrections for non-Oban standard ports out of the current Oban-based
+  calculator rather than silently applying them to the wrong prediction.
+
 ## 0.5.3 - 2026-08-18
 
 - Require shared Tide Resolver events to contain an explicit UTC or numeric

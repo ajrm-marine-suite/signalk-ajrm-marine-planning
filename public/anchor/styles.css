@@ -690,58 +690,6 @@ select {
   margin-top: 12px;
 }
 
-.tableActions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 6px;
-}
-
-.tableActions button {
-  padding: 5px 8px;
-  font-size: 16px;
-}
-
-.tableSubtext {
-  display: block;
-  margin-top: 2px;
-  color: var(--muted);
-  font-size: 16px;
-}
-
-.secondaryAlmanacBlock table {
-  min-width: 760px;
-}
-
-.obanReferenceEditor {
-  margin: 0 0 10px;
-  padding: 10px;
-}
-
-.obanReferenceEditor h3 {
-  margin-top: 0;
-}
-
-.secondaryAlmanacBlock th,
-.secondaryAlmanacBlock td {
-  text-align: center;
-  vertical-align: middle;
-}
-
-.secondaryAlmanacBlock th:first-child,
-.secondaryAlmanacBlock th:nth-child(2) {
-  text-align: left;
-}
-
-.secondaryAlmanacBlock input {
-  padding: 5px 4px;
-  text-align: center;
-}
-
-.secondaryAlmanacBlock thead span {
-  color: var(--muted);
-  font-weight: 600;
-}
-
 table {
   width: 100%;
   border-collapse: collapse;

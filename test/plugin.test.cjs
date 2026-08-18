@@ -19,6 +19,20 @@ async function fixture(t) {
 		id: "0b9ecfef-3260-4f1e-a41f-5f2fdf7dfbec", name: "Cuan Sound", types: ["tidalGate"],
 		feature: { geometry: { type: "Point", coordinates: [-5.637656, 56.27224] } },
 	};
+	const oban = { id: "oban", name: "Oban", types: ["tidalStandardPort"] };
+	const secondaryPort = {
+		id: "tobermory-location", name: "Tobermory", types: ["tidalSecondaryPort"],
+		properties: { tide: {
+			parentLocationRef: "/resources/locations/oban",
+			secondaryPortCorrections: {
+				contract: "ajrm-secondary-port-corrections-v1", legacyId: "tobermory",
+				standardReferenceLevels: { mhws: 4, mhwn: 2.9, mlwn: 1.8, mlws: 0.7 },
+				hwTimeOffsetsMinutes: { t0000: 20, t0600: 20, t1200: 20, t1800: 20 },
+				lwTimeOffsetsMinutes: { t0000: 20, t0600: 20, t1200: 20, t1800: 20 },
+				heightDifferencesM: { mhws: 0.5, mhwn: 0.6, mlwn: 0.1, mlws: 0.2 },
+			},
+		} },
+	};
 	const tideResult = {
 		valid: true, station: { id: "0372", name: "Oban" },
 		events: [{ type: "high", at: "2026-08-18T12:00:00.000Z", heightM: 3.2 }],
@@ -33,7 +47,7 @@ async function fixture(t) {
 	};
 	const app = {
 		getDataDirPath: () => directory, setPluginStatus() {}, handleMessage() {},
-		ajrmMarineLocations: { contract: "ajrm-marine-locations-service-v1", async list() { return [gate]; } },
+		ajrmMarineLocations: { contract: "ajrm-marine-locations-service-v1", async list() { return [gate, oban, secondaryPort]; } },
 		ajrmMarineTides: {
 			contract: "ajrm-marine-tides-service-v1",
 			configured: true,
@@ -97,6 +111,20 @@ test("anchor state contains no API secret and uses shared tide events", async (t
 	assert.equal(result.body.tideData.managedBy, "AJRM Marine Location Editor");
 	assert.equal(result.body.tideData.events[0].Height, 3.2);
 	assert.equal(result.body.tideData.events[0].DateTime, "2026-08-18T12:00:00.000Z");
+	assert.equal(result.body.secondaryPorts[0].id, "tobermory");
+	assert.equal(result.body.secondaryPorts[0].locationId, "tobermory-location");
+	plugin.stop();
+});
+
+test("anchor state ignores submitted secondary-port copies", async (t) => {
+	const { call, plugin } = await fixture(t);
+	const result = await call("PUT", "/anchor/state", { body: {
+		tide: { source: "secondary", selectedPortId: "tobermory" },
+		secondaryPorts: [{ id: "spoofed", name: "Wrong owner" }],
+		deletedSecondaryPortIds: ["tobermory"],
+	} });
+	assert.equal(result.statusCode, 200);
+	assert.deepEqual(result.body.secondaryPorts.map((port) => port.id), ["tobermory"]);
 	plugin.stop();
 });
 

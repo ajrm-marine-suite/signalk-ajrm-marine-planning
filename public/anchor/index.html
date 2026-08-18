@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Anchor Force Planner</title>
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles.css?v=0.5.4">
   </head>
   <body>
     <header class="topbar">
@@ -23,7 +23,6 @@
         <button class="tabButton active" type="button" data-tab="planner" title="Main anchoring planner: enter conditions, choose a tide view, and see rode, clearance, catenary, and anchor holding checks.">Planner</button>
         <button class="tabButton" type="button" data-tab="tide" title="Manual tide entry and secondary-port selection. Shows current tide rise, spring percentage, keel clearance, and tide curve.">Tide</button>
         <button class="tabButton" type="button" data-tab="tideData" title="Fetch and inspect downloaded Oban tide events from the configured tide API.">Tide Data</button>
-        <button class="tabButton" type="button" data-tab="secondaryPorts" title="Add, edit, or delete almanac-style secondary-port corrections.">Secondary Ports</button>
         <button class="tabButton" type="button" data-tab="settings" title="Boat constants, ground tackle, echo-sounder mode, API settings, and save/reset controls.">Settings</button>
         <button class="tabButton" type="button" data-tab="force" title="Wind force lookup table and curve using the current boat windage settings.">Wind Force</button>
         <button class="tabButton" type="button" data-tab="formulas" title="Formula notes for the calculations used by the app.">Formulas</button>
@@ -125,7 +124,7 @@
         <div class="panelHeader">
           <div>
             <h2>Tide</h2>
-            <p>Enter Oban tide data, then optionally apply a saved secondary-port correction.</p>
+            <p>Enter Oban tide data, then optionally apply a secondary-port correction maintained in AJRM Marine Location Editor.</p>
           </div>
         </div>
         <section class="inputPanel settingsPanel" aria-label="Tide settings">
@@ -207,106 +206,6 @@
                 <th>Time</th>
                 <th>Height</th>
                 <th>% Spring</th>
-              </tr>
-            </thead>
-            <tbody></tbody>
-          </table>
-        </section>
-      </section>
-
-      <section id="secondaryPortsPanel" class="tabPanel">
-        <div class="panelHeader">
-          <div>
-            <h2>Secondary Ports</h2>
-            <p>Maintain your own correction table from Oban. Enter data only from sources you are licensed to use.</p>
-          </div>
-        </div>
-        <section class="inputPanel settingsPanel secondaryEditor" aria-label="Secondary port editor">
-          <section class="inputPanel obanReferenceEditor" aria-label="Oban reference levels">
-            <h3>Oban reference levels</h3>
-            <div class="inputGrid settingsGrid">
-              <label title="Oban Mean High Water Springs, from the almanac. Used to calculate %Spring for HW and interpolate secondary-port HW height differences.">MHWS
-                <span class="inputWithUnit"><input id="obanMhws" type="number" value="4.0" step="0.1"><span>m</span></span>
-              </label>
-              <label title="Oban Mean High Water Neaps, from the almanac. Used to calculate %Spring for HW and interpolate secondary-port HW height differences.">MHWN
-                <span class="inputWithUnit"><input id="obanMhwn" type="number" value="2.9" step="0.1"><span>m</span></span>
-              </label>
-              <label title="Oban Mean Low Water Neaps, from the almanac. Used to calculate %Spring for LW and interpolate secondary-port LW height differences.">MLWN
-                <span class="inputWithUnit"><input id="obanMlwn" type="number" value="1.8" step="0.1"><span>m</span></span>
-              </label>
-              <label title="Oban Mean Low Water Springs, from the almanac. Used to calculate %Spring for LW and interpolate secondary-port LW height differences.">MLWS
-                <span class="inputWithUnit"><input id="obanMlws" type="number" value="0.7" step="0.1"><span>m</span></span>
-              </label>
-            </div>
-          </section>
-          <label title="Secondary port or anchorage name shown in the Tide tab pulldown.">Port name
-            <input id="secondaryPortName" type="text" placeholder="e.g. Port Ellen">
-          </label>
-          <section class="tableWrap secondaryAlmanacBlock" aria-label="Secondary port correction block">
-            <table>
-              <thead>
-                <tr>
-                  <th colspan="2">Standard Port OBAN</th>
-                  <th colspan="4">Times</th>
-                  <th colspan="4">Height differences in metres</th>
-                </tr>
-                <tr>
-                  <th colspan="2"></th>
-                  <th>0000</th>
-                  <th>0600</th>
-                  <th>1200</th>
-                  <th>1800</th>
-                  <th>MHWS<br><span id="obanMhwsLabel">4.0</span></th>
-                  <th>MHWN<br><span id="obanMhwnLabel">2.9</span></th>
-                  <th>MLWN<br><span id="obanMlwnLabel">1.8</span></th>
-                  <th>MLWS<br><span id="obanMlwsLabel">0.7</span></th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <th rowspan="2">Differences</th>
-                  <th>HW</th>
-                  <td><input id="secondaryHw0000" type="number" value="0" step="1" title="Minutes to add to Oban HW when Oban HW is near 0000."></td>
-                  <td><input id="secondaryHw0600" type="number" value="0" step="1" title="Minutes to add to Oban HW when Oban HW is near 0600."></td>
-                  <td><input id="secondaryHw1200" type="number" value="0" step="1" title="Minutes to add to Oban HW when Oban HW is near 1200."></td>
-                  <td><input id="secondaryHw1800" type="number" value="0" step="1" title="Minutes to add to Oban HW when Oban HW is near 1800."></td>
-                  <td><input id="secondaryDiffMhws" type="number" value="0" step="0.1" title="Height difference to add at MHWS."></td>
-                  <td><input id="secondaryDiffMhwn" type="number" value="0" step="0.1" title="Height difference to add at MHWN."></td>
-                  <td></td>
-                  <td></td>
-                </tr>
-                <tr>
-                  <th>LW</th>
-                  <td><input id="secondaryLw0000" type="number" value="0" step="1" title="Minutes to add to Oban LW when Oban LW is near 0000."></td>
-                  <td><input id="secondaryLw0600" type="number" value="0" step="1" title="Minutes to add to Oban LW when Oban LW is near 0600."></td>
-                  <td><input id="secondaryLw1200" type="number" value="0" step="1" title="Minutes to add to Oban LW when Oban LW is near 1200."></td>
-                  <td><input id="secondaryLw1800" type="number" value="0" step="1" title="Minutes to add to Oban LW when Oban LW is near 1800."></td>
-                  <td></td>
-                  <td></td>
-                  <td><input id="secondaryDiffMlwn" type="number" value="0" step="0.1" title="Height difference to add at MLWN."></td>
-                  <td><input id="secondaryDiffMlws" type="number" value="0" step="0.1" title="Height difference to add at MLWS."></td>
-                </tr>
-              </tbody>
-            </table>
-          </section>
-          <label title="Optional source, year, almanac page, caveat, or note for this correction.">Notes
-            <input id="secondaryPortNotes" type="text" placeholder="source/year/notes">
-          </label>
-          <div class="secondaryActions">
-            <button id="saveSecondaryPort" type="button" title="Save this secondary-port correction table. Editing an existing port updates it.">Add secondary port</button>
-            <button id="clearSecondaryPort" type="button" title="Clear the secondary-port editor without deleting saved ports.">Clear form</button>
-          </div>
-        </section>
-        <section class="tableWrap secondaryTable">
-          <table id="secondaryPortsTable">
-            <thead>
-              <tr>
-                <th>Port</th>
-                <th>HW corrections</th>
-                <th>LW corrections</th>
-                <th>Heights</th>
-                <th>Notes</th>
-                <th>Actions</th>
               </tr>
             </thead>
             <tbody></tbody>
@@ -488,6 +387,6 @@
       </section>
     </main>
 
-    <script src="app.js"></script>
+    <script src="app.js?v=0.5.4"></script>
   </body>
 </html>

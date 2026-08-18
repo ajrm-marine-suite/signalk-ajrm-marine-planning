@@ -12,6 +12,7 @@ const packageJson = require("../package.json");
 const defaultGateConstants = require("../defaults/gate-location-constants.json");
 const defaultGateSettings = require("../defaults/gate-settings.json");
 const defaultAnchorState = require("../defaults/anchor-state.json");
+const { secondaryPortsFromLocations } = require("./secondary-ports.cjs");
 const STATUS_PATH = "plugins.ajrmMarinePlanning";
 const SERVICE_REGISTRIES = Object.freeze({
 	ajrmMarineLocations: Symbol.for("mcdonaldajr.ajrmMarineLocations"),
@@ -207,10 +208,13 @@ module.exports = function ajrmMarinePlanning(app) {
 			res.json(publicAnchorState(state, await tideStatus(false), sharedService("ajrmMarineTides")?.configured === true));
 		});
 		router.put("/anchor/state", requireWrite(async (req, res) => {
-			const next = { ...clone(defaultAnchorState), ...(req.body || {}) };
+			const submitted = clone(req.body || {});
+			delete submitted.secondaryPorts;
+			delete submitted.deletedSecondaryPortIds;
+			const next = { ...clone(defaultAnchorState), ...submitted, secondaryPorts: [] };
 			next.tideData = { ...(next.tideData || {}), ukhoApiKey: "", events: [], cache: null };
 			await writeJson(anchorStateFile, next);
-			res.json(publicAnchorState(next, await tideStatus(false), sharedService("ajrmMarineTides")?.configured === true));
+			res.json(publicAnchorState(await anchorState(), await tideStatus(false), sharedService("ajrmMarineTides")?.configured === true));
 		}));
 		router.put("/anchor/tide-data/settings", requireWrite(async (req, res) => {
 			const state = await anchorState();
@@ -292,6 +296,14 @@ module.exports = function ajrmMarinePlanning(app) {
 		return locations.filter((location) => location.types.includes("tidalGate"));
 	}
 
+	async function sharedSecondaryPorts() {
+		const locations = await requireService("ajrmMarineLocations", "location").list({ workspace: "tides" });
+		// Anchor Force currently receives Oban tide predictions. Corrections for
+		// other standard ports remain editable in Location Editor but are not
+		// offered until the planner can request those standard-port predictions.
+		return secondaryPortsFromLocations(locations, { standardPortName: "Oban" });
+	}
+
 	async function gateLocation(name) {
 		if (!name) return null;
 		const wanted = normalizeName(name);
@@ -323,7 +335,7 @@ module.exports = function ajrmMarinePlanning(app) {
 		return {
 			...clone(defaultAnchorState), ...saved,
 			tide: { ...clone(defaultAnchorState.tide), ...(saved.tide || {}) },
-			secondaryPorts: saved.secondaryPorts || clone(defaultAnchorState.secondaryPorts || []),
+			secondaryPorts: await sharedSecondaryPorts(),
 			tideData: { ...clone(defaultAnchorState.tideData || {}), ...(saved.tideData || {}), ukhoApiKey: "" },
 		};
 	}

@@ -61,7 +61,6 @@ let serverState = {
     }
   },
   secondaryPorts: [],
-  deletedSecondaryPortIds: [],
   tideData: {
     stationName: "Oban",
     stationId: "0372",
@@ -74,7 +73,6 @@ let serverState = {
   }
 };
 let saveServerStateTimer = null;
-let editingSecondaryPortId = null;
 
 function escapeHtml(value) {
   const div = document.createElement("div");
@@ -350,7 +348,6 @@ function mergeServerState(state = {}) {
       }
     },
     secondaryPorts: Array.isArray(state.secondaryPorts) ? state.secondaryPorts : [],
-    deletedSecondaryPortIds: Array.isArray(state.deletedSecondaryPortIds) ? state.deletedSecondaryPortIds : [],
     tideData: {
       ...serverState.tideData,
       ...(state.tideData || {})
@@ -1007,33 +1004,11 @@ function applyServerStateToTideFields() {
   document.getElementById("lwHeight").value = oban.lwHeight ?? 1;
   document.getElementById("hwTimeUnit").textContent = timeBasisLabel();
   document.getElementById("lwTimeUnit").textContent = timeBasisLabel();
-  document.getElementById("obanMhws").value = reference.mhws ?? 4.0;
-  document.getElementById("obanMhwn").value = reference.mhwn ?? 2.9;
-  document.getElementById("obanMlwn").value = reference.mlwn ?? 1.8;
-  document.getElementById("obanMlws").value = reference.mlws ?? 0.7;
-  renderObanReferenceLabels();
   document.getElementById("secondaryPortSelect").value = serverState.tide.selectedPortId || "";
   document.querySelectorAll(".tideSourceButton").forEach((button) => {
     button.classList.toggle("active", button.dataset.tideSource === serverState.tide.source);
   });
   renderSecondaryTidePreview();
-}
-
-function obanReferenceFromFields() {
-  return {
-    mhws: number("obanMhws"),
-    mhwn: number("obanMhwn"),
-    mlwn: number("obanMlwn"),
-    mlws: number("obanMlws")
-  };
-}
-
-function renderObanReferenceLabels() {
-  const reference = serverState.tide.obanReferenceLevels;
-  document.getElementById("obanMhwsLabel").textContent = fmt(Number(reference.mhws || 0), 1, "");
-  document.getElementById("obanMhwnLabel").textContent = fmt(Number(reference.mhwn || 0), 1, "");
-  document.getElementById("obanMlwnLabel").textContent = fmt(Number(reference.mlwn || 0), 1, "");
-  document.getElementById("obanMlwsLabel").textContent = fmt(Number(reference.mlws || 0), 1, "");
 }
 
 function renderSecondaryPortOptions() {
@@ -1063,58 +1038,9 @@ function renderSecondaryTidePreview() {
   });
 }
 
-function renderSecondaryPortsTable() {
-  const tbody = document.querySelector("#secondaryPortsTable tbody");
-  if (!serverState.secondaryPorts.length) {
-    tbody.innerHTML = `<tr><td colspan="6">No secondary ports saved yet.</td></tr>`;
-    return;
-  }
-  tbody.innerHTML = serverState.secondaryPorts
-    .slice()
-    .sort((a, b) => a.name.localeCompare(b.name))
-    .map((port) => {
-      const hwOffsets = portOffsets(port, "hw");
-      const lwOffsets = portOffsets(port, "lw");
-      const heightDiffs = portHeightDiffs(port);
-      const hwTime = `0000 ${fmtOffset(hwOffsets.t0000)} / 0600 ${fmtOffset(hwOffsets.t0600)} / 1200 ${fmtOffset(hwOffsets.t1200)} / 1800 ${fmtOffset(hwOffsets.t1800)}`;
-      const lwTime = `0000 ${fmtOffset(lwOffsets.t0000)} / 0600 ${fmtOffset(lwOffsets.t0600)} / 1200 ${fmtOffset(lwOffsets.t1200)} / 1800 ${fmtOffset(lwOffsets.t1800)}`;
-      const reference = portReferenceLevels(port);
-      const heights = `MHWS ${fmt(Number(reference.mhws || 0), 1, "")} ${fmt(Number(heightDiffs.mhws || 0), 1, " m")} / MHWN ${fmt(Number(reference.mhwn || 0), 1, "")} ${fmt(Number(heightDiffs.mhwn || 0), 1, " m")} / MLWN ${fmt(Number(reference.mlwn || 0), 1, "")} ${fmt(Number(heightDiffs.mlwn || 0), 1, " m")} / MLWS ${fmt(Number(reference.mlws || 0), 1, "")} ${fmt(Number(heightDiffs.mlws || 0), 1, " m")}`;
-      return `
-      <tr>
-        <td>${escapeHtml(port.name)}<span class="tableSubtext">${escapeHtml(portStandardPort(port))}</span></td>
-        <td>${escapeHtml(hwTime)}</td>
-        <td>${escapeHtml(lwTime)}</td>
-        <td>${escapeHtml(heights)}</td>
-        <td>${escapeHtml(port.notes || "")}</td>
-        <td class="tableActions">
-          <button type="button" data-edit-secondary="${escapeHtml(port.id)}">Edit</button>
-          <button type="button" class="dangerButton" data-delete-secondary="${escapeHtml(port.id)}">Delete</button>
-        </td>
-      </tr>
-    `;
-    }).join("");
-}
-
-function clearSecondaryPortForm() {
-  editingSecondaryPortId = null;
-  document.getElementById("secondaryPortName").value = "";
-  ["0000", "0600", "1200", "1800"].forEach((time) => {
-    document.getElementById(`secondaryHw${time}`).value = "0";
-    document.getElementById(`secondaryLw${time}`).value = "0";
-  });
-  document.getElementById("secondaryDiffMhws").value = "0";
-  document.getElementById("secondaryDiffMhwn").value = "0";
-  document.getElementById("secondaryDiffMlwn").value = "0";
-  document.getElementById("secondaryDiffMlws").value = "0";
-  document.getElementById("secondaryPortNotes").value = "";
-  document.getElementById("saveSecondaryPort").textContent = "Add secondary port";
-}
-
 function renderSecondaryPortManager() {
   renderSecondaryPortOptions();
   renderSecondaryTidePreview();
-  renderSecondaryPortsTable();
 }
 
 function sortedTideEvents() {
@@ -1201,12 +1127,6 @@ function renderTideDataManager() {
 
 function persistTideStateFromFields() {
   serverState.tide.oban = obanTideFromFields();
-  saveServerStateSoon();
-}
-
-function persistObanReferenceFromFields() {
-  serverState.tide.obanReferenceLevels = obanReferenceFromFields();
-  renderObanReferenceLabels();
   saveServerStateSoon();
 }
 
@@ -1883,16 +1803,6 @@ checkboxIds.forEach((id) => {
   });
 });
 
-["obanMhws", "obanMhwn", "obanMlwn", "obanMlws"].forEach((id) => {
-  document.getElementById(id).addEventListener("input", () => {
-    persistObanReferenceFromFields();
-    idealRode = null;
-    clearIdealRodeRecommendation();
-    renderSecondaryPortManager();
-    renderAll();
-  });
-});
-
 document.getElementById("calculateIdealRode").addEventListener("click", () => {
   idealRode = calculateIdealRode();
   showIdealRodeRecommendation(idealRode);
@@ -1943,47 +1853,6 @@ document.getElementById("secondaryPortSelect").addEventListener("change", (event
   saveServerStateSoon();
   applyServerStateToTideFields();
   renderAll();
-});
-
-document.getElementById("saveSecondaryPort").addEventListener("click", () => {
-  const name = document.getElementById("secondaryPortName").value.trim();
-  if (!name) return;
-  const port = {
-    id: editingSecondaryPortId || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    name,
-    hwOffsets: {
-      t0000: Number(document.getElementById("secondaryHw0000").value) || 0,
-      t0600: Number(document.getElementById("secondaryHw0600").value) || 0,
-      t1200: Number(document.getElementById("secondaryHw1200").value) || 0,
-      t1800: Number(document.getElementById("secondaryHw1800").value) || 0
-    },
-    lwOffsets: {
-      t0000: Number(document.getElementById("secondaryLw0000").value) || 0,
-      t0600: Number(document.getElementById("secondaryLw0600").value) || 0,
-      t1200: Number(document.getElementById("secondaryLw1200").value) || 0,
-      t1800: Number(document.getElementById("secondaryLw1800").value) || 0
-    },
-    heightDiffs: {
-      mhws: Number(document.getElementById("secondaryDiffMhws").value) || 0,
-      mhwn: Number(document.getElementById("secondaryDiffMhwn").value) || 0,
-      mlwn: Number(document.getElementById("secondaryDiffMlwn").value) || 0,
-      mlws: Number(document.getElementById("secondaryDiffMlws").value) || 0
-    },
-    notes: document.getElementById("secondaryPortNotes").value.trim()
-  };
-  const existingIndex = serverState.secondaryPorts.findIndex((item) => item.id === port.id);
-  if (existingIndex >= 0) serverState.secondaryPorts[existingIndex] = port;
-  else serverState.secondaryPorts.push(port);
-  serverState.deletedSecondaryPortIds = serverState.deletedSecondaryPortIds.filter((id) => id !== port.id);
-  serverState.tide.selectedPortId = port.id;
-  clearSecondaryPortForm();
-  renderSecondaryPortManager();
-  saveServerStateSoon();
-  renderAll();
-});
-
-document.getElementById("clearSecondaryPort").addEventListener("click", () => {
-  clearSecondaryPortForm();
 });
 
 document.getElementById("saveTideDataSettings").addEventListener("click", async () => {
@@ -2082,46 +1951,6 @@ document.getElementById("tideDataDisplayMode").addEventListener("change", async 
   }
   applyServerStateToTideFields();
   renderAll();
-});
-
-document.getElementById("secondaryPortsTable").addEventListener("click", (event) => {
-  const editId = event.target.dataset.editSecondary;
-  const deleteId = event.target.dataset.deleteSecondary;
-  if (editId) {
-    const port = serverState.secondaryPorts.find((item) => item.id === editId);
-    if (!port) return;
-    editingSecondaryPortId = port.id;
-    document.getElementById("secondaryPortName").value = port.name;
-    const hwOffsets = portOffsets(port, "hw");
-    const lwOffsets = portOffsets(port, "lw");
-    document.getElementById("secondaryHw0000").value = hwOffsets.t0000 || 0;
-    document.getElementById("secondaryHw0600").value = hwOffsets.t0600 || 0;
-    document.getElementById("secondaryHw1200").value = hwOffsets.t1200 || 0;
-    document.getElementById("secondaryHw1800").value = hwOffsets.t1800 || 0;
-    document.getElementById("secondaryLw0000").value = lwOffsets.t0000 || 0;
-    document.getElementById("secondaryLw0600").value = lwOffsets.t0600 || 0;
-    document.getElementById("secondaryLw1200").value = lwOffsets.t1200 || 0;
-    document.getElementById("secondaryLw1800").value = lwOffsets.t1800 || 0;
-    const heightDiffs = portHeightDiffs(port);
-    document.getElementById("secondaryDiffMhws").value = heightDiffs.mhws || 0;
-    document.getElementById("secondaryDiffMhwn").value = heightDiffs.mhwn || 0;
-    document.getElementById("secondaryDiffMlwn").value = heightDiffs.mlwn || 0;
-    document.getElementById("secondaryDiffMlws").value = heightDiffs.mlws || 0;
-    document.getElementById("secondaryPortNotes").value = port.notes || "";
-    document.getElementById("saveSecondaryPort").textContent = "Update secondary port";
-  }
-  if (deleteId) {
-    serverState.secondaryPorts = serverState.secondaryPorts.filter((item) => item.id !== deleteId);
-    if (!serverState.deletedSecondaryPortIds.includes(deleteId)) serverState.deletedSecondaryPortIds.push(deleteId);
-    if (serverState.tide.selectedPortId === deleteId) {
-      serverState.tide.selectedPortId = "";
-      serverState.tide.source = "oban";
-    }
-    clearSecondaryPortForm();
-    renderSecondaryPortManager();
-    saveServerStateSoon();
-    renderAll();
-  }
 });
 
 async function init() {
