@@ -67,6 +67,7 @@ test("gate weather and tides use shared services and authoritative location", as
 	assert.equal(calls.weather[0].contextLocationId, "0b9ecfef-3260-4f1e-a41f-5f2fdf7dfbec");
 	result = await call("GET", "/gate/tides", { query: { location: "Cuan Sound" } });
 	assert.equal(result.body.events[0].EventType, "HighWater");
+	assert.equal(result.body.events[0].DateTime, "2026-08-18T12:00:00.000Z");
 	assert.equal(calls.tide[0].includeEvents, true);
 	plugin.stop();
 });
@@ -95,6 +96,7 @@ test("anchor state contains no API secret and uses shared tide events", async (t
 	assert.equal(result.body.tideData.ukhoApiKey, undefined);
 	assert.equal(result.body.tideData.managedBy, "AJRM Marine Location Editor");
 	assert.equal(result.body.tideData.events[0].Height, 3.2);
+	assert.equal(result.body.tideData.events[0].DateTime, "2026-08-18T12:00:00.000Z");
 	plugin.stop();
 });
 

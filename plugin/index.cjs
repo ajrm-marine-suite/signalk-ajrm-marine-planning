@@ -71,14 +71,21 @@ function cacheShape(result) {
 }
 
 function ukhoEvents(result) {
-	return (result?.events || []).map((event) => ({
-		EventType: event.type === "high" ? "HighWater" : "LowWater",
-		DateTime: event.at,
-		Height: event.heightM,
-		IsApproximateTime: false,
-		IsApproximateHeight: false,
-		Filtered: false,
-	}));
+	return (result?.events || []).flatMap((event) => {
+		const timestamp = String(event?.at || "").trim();
+		// The shared tide contract uses absolute ISO instants. Do not let either
+		// planner reinterpret an unqualified wall-clock value in the browser's or
+		// Pi's local timezone.
+		if (!/(?:Z|[+-]\d{2}:?\d{2})$/i.test(timestamp) || Number.isNaN(Date.parse(timestamp))) return [];
+		return [{
+			EventType: event.type === "high" ? "HighWater" : "LowWater",
+			DateTime: new Date(timestamp).toISOString(),
+			Height: event.heightM,
+			IsApproximateTime: false,
+			IsApproximateHeight: false,
+			Filtered: false,
+		}];
+	});
 }
 
 function publicAnchorState(state, tideResult, tideConfigured = false) {

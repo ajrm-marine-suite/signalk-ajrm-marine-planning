@@ -1,5 +1,10 @@
 # AJRM Marine Planning
 
+Version `0.5.3` requires explicit timezone information on tide events received
+from the shared Tide Resolver and preserves their normalized UTC instants for
+both planners. Gate Passage continues to present UK civil time where labelled,
+and Anchor Force retains its selectable UT/local display mode.
+
 AJRM Marine Planning is one Signal K plugin with two related views:
 
 - **Gate Passage** combines a forecast, UKHO tidal events and editable local

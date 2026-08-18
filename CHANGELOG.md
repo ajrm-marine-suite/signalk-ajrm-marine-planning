@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.3 - 2026-08-18
+
+- Require shared Tide Resolver events to contain an explicit UTC or numeric
+  timezone before exposing them to Gate Passage or Anchor Force.
+- Normalize accepted instants to canonical UTC, preventing either planner from
+  reinterpreting an unqualified timestamp in a local timezone.
+
 ## 0.5.2 - 2026-08-18
 
 - Resolve Location Editor's shared location, tide and weather services through
