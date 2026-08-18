@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.12 - 2026-08-18
+
+- Unwrap Signal K full-model leaves before copying live wind, current, depth,
+  speed and position values into Anchor Force.
+- Read tidal-current speed from the standard `environment.current.drift` path,
+  with `environment.tide.drift` as a compatibility fallback.
+- Restore nearest-secondary-port selection when own-vessel position is exposed
+  as a full-model Signal K leaf.
+
 ## 0.5.11 - 2026-08-18
 
 - Replace Anchor Force's separate 24-hour SVG with the same versioned tide

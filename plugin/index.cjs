@@ -22,6 +22,14 @@ const PLANNING_DIAGNOSTICS_REGISTRY = Symbol.for("mcdonaldajr.ajrmMarinePlanning
 
 function clone(value) { return structuredClone(value); }
 
+/** Return the payload from either a raw value or a Signal K full-model leaf. */
+function signalKValue(entry) {
+	if (entry && typeof entry === "object" && Object.prototype.hasOwnProperty.call(entry, "value")) {
+		return entry.value ?? null;
+	}
+	return entry ?? null;
+}
+
 function gateSettings(value = {}, fillDefaults = true) {
 	return Object.fromEntries(Object.entries(defaultGateSettings).flatMap(([key, fallback]) => {
 		if (Object.prototype.hasOwnProperty.call(value, key)) return [[key, value[key]]];
@@ -228,7 +236,7 @@ module.exports = function ajrmMarinePlanning(app) {
 			return res.json(publicAnchorState(saved, await tideStatus(false, saved), sharedService("ajrmMarineTides")?.configured === true));
 		}));
 		router.post("/anchor/tide-port/recommend", requireWrite(async (_req, res) => {
-			const position = app.getSelfPath?.("navigation.position");
+			const position = signalKValue(app.getSelfPath?.("navigation.position"));
 			if (!Number.isFinite(position?.latitude) || !Number.isFinite(position?.longitude)) {
 				return res.status(409).json({ error: "A current own-vessel position is needed to find a nearby secondary port." });
 			}
@@ -416,7 +424,14 @@ module.exports = function ajrmMarinePlanning(app) {
 	}
 
 	function liveInputs() {
-		const value = (pathName) => app.getSelfPath?.(pathName) ?? null;
+		const value = (pathName) => signalKValue(app.getSelfPath?.(pathName));
+		const firstValue = (...pathNames) => {
+			for (const pathName of pathNames) {
+				const candidate = value(pathName);
+				if (candidate !== null) return candidate;
+			}
+			return null;
+		};
 		return {
 			at: new Date().toISOString(),
 			position: value("navigation.position"),
@@ -425,7 +440,7 @@ module.exports = function ajrmMarinePlanning(app) {
 			depthBelowKeelM: value("environment.depth.belowKeel"),
 			depthBelowSurfaceM: value("environment.depth.belowSurface"),
 			waterSpeedMps: value("navigation.speedThroughWater"),
-			currentSpeedMps: value("environment.current.speed"),
+			currentSpeedMps: firstValue("environment.current.drift", "environment.tide.drift"),
 			sources: "Signal K current vessel values; null means unavailable",
 		};
 	}

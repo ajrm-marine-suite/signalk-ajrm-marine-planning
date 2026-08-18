@@ -55,9 +55,17 @@ async function fixture(t) {
 		freshness: { state: "fresh", staleAfterSeconds: 3600 }, error: "",
 	};
 	const tidalRegion = { id: "west-region", name: "West Scotland", types: ["tidalRegion"] };
+	const selfValues = {
+		"navigation.position": { value: { latitude: 56.62, longitude: -6.05 }, timestamp: "2026-08-18T12:00:00.000Z" },
+		"environment.wind.speedApparent": { value: 7.5, timestamp: "2026-08-18T12:00:00.000Z" },
+		"environment.wind.speedTrue": { value: 8.25, timestamp: "2026-08-18T12:00:00.000Z" },
+		"environment.depth.belowKeel": { value: 4.6, timestamp: "2026-08-18T12:00:00.000Z" },
+		"navigation.speedThroughWater": { value: 2.1, timestamp: "2026-08-18T12:00:00.000Z" },
+		"environment.current.drift": { value: 0.7, timestamp: "2026-08-18T12:00:00.000Z" },
+	};
 	const app = {
 		getDataDirPath: () => directory, setPluginStatus() {}, handleMessage() {},
-		getSelfPath(pathName) { return pathName === "navigation.position" ? { latitude: 56.62, longitude: -6.05 } : null; },
+		getSelfPath(pathName) { return selfValues[pathName] ?? null; },
 		ajrmMarineLocations: { contract: "ajrm-marine-locations-service-v1", async list() { return [gate, oban, secondaryPort, tidalRegion]; } },
 		ajrmMarineTides: {
 			contract: "ajrm-marine-tides-service-v1",
@@ -156,6 +164,19 @@ test("anchor selects the nearest secondary port in the vessel's tidal region", a
 	assert.equal(result.body.tideRecommendation.portName, "Tobermory");
 	assert.equal(result.body.tideRecommendation.regionName, "West Scotland");
 	assert.equal(result.body.tideRecommendation.distanceM, 850);
+	plugin.stop();
+});
+
+test("anchor live inputs unwrap Signal K leaves and use the current drift path", async (t) => {
+	const { call, plugin } = await fixture(t);
+	const result = await call("GET", "/anchor/live");
+	assert.equal(result.statusCode, 200);
+	assert.deepEqual(result.body.position, { latitude: 56.62, longitude: -6.05 });
+	assert.equal(result.body.windSpeedApparentMps, 7.5);
+	assert.equal(result.body.windSpeedTrueMps, 8.25);
+	assert.equal(result.body.depthBelowKeelM, 4.6);
+	assert.equal(result.body.waterSpeedMps, 2.1);
+	assert.equal(result.body.currentSpeedMps, 0.7);
 	plugin.stop();
 });
 
