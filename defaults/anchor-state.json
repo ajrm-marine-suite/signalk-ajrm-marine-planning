@@ -1,18 +1,11 @@
 {
   "tide": {
-    "source": "referencePort",
     "selectedPortId": "",
     "standardReferenceLevels": {
       "mhws": 4,
       "mhwn": 2.9,
       "mlwn": 1.8,
       "mlws": 0.7
-    },
-    "referencePort": {
-      "hwTime": "08:52",
-      "lwTime": "03:01",
-      "hwHeight": 3.2,
-      "lwHeight": 0.9
     }
   },
   "secondaryPorts": [],

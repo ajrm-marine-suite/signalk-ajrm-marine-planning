@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.5.7 - 2026-08-18
+
+- Remove manual reference-port HW/LW entry and browser-side secondary-port
+  correction from Anchor Force; Location Editor's resolved events are the sole
+  tide input.
+- Persist a manually selected standard or secondary port and clear the previous
+  station's figures immediately when the choice changes or cannot resolve.
+- Add one-click selection of the nearest usable secondary port inside the
+  vessel's containing tidal region.
+
 ## 0.5.6 - 2026-08-18
 
 - Request the specifically selected standard or secondary location from the

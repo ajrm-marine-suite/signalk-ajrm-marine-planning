@@ -329,6 +329,17 @@ select {
 
 .tideSourcePanel {
   margin: 0 0 10px;
+  grid-template-columns: minmax(260px, 1fr) auto;
+  align-items: end;
+}
+
+.mutedText {
+  margin: 4px 0 14px;
+  color: var(--muted);
+}
+
+@media (max-width: 680px) {
+  .tideSourcePanel { grid-template-columns: 1fr; }
 }
 
 .depthCompare {

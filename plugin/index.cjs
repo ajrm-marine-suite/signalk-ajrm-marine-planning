@@ -90,18 +90,20 @@ function ukhoEvents(result) {
 
 function publicAnchorState(state, tideResult, tideConfigured = false) {
 	const value = clone(state);
+	const selectedPort = value.secondaryPorts?.find((entry) => entry.id === value.tide?.selectedPortId) || null;
+	const resolvedSelectedPort = tideResult?.selectedPort?.id === selectedPort?.locationId;
 	value.tideData = {
 		...(value.tideData || {}),
-		stationName: tideResult?.station?.name || value.tideData?.stationName || "",
-		stationId: tideResult?.station?.id || value.tideData?.stationId || "",
+		stationName: tideResult?.station?.name || selectedPort?.name || "",
+		stationId: tideResult?.station?.id || "",
 		ukhoApiKey: undefined,
 		ukhoApiKeySet: tideConfigured,
 		managedBy: "AJRM Marine Location Editor",
 		resolvedLocationId: tideResult?.selectedPort?.id || null,
 		referenceLevels: tideResult?.referenceLevels || null,
-		events: tideResult?.valid ? ukhoEvents(tideResult) : value.tideData?.events || [],
-		cache: tideResult ? cacheShape(tideResult) : value.tideData?.cache || null,
-		error: tideResult?.error || "",
+		events: tideResult?.valid && resolvedSelectedPort ? ukhoEvents(tideResult) : [],
+		cache: selectedPort ? (tideResult ? cacheShape(tideResult) : value.tideData?.cache || null) : null,
+		error: selectedPort ? (tideResult?.error || "") : "Select a tidal port.",
 	};
 	return value;
 }
@@ -216,6 +218,50 @@ module.exports = function ajrmMarinePlanning(app) {
 			const saved = await anchorState();
 			res.json(publicAnchorState(saved, await tideStatus(false, saved), sharedService("ajrmMarineTides")?.configured === true));
 		}));
+		router.put("/anchor/tide-port", requireWrite(async (req, res) => {
+			const state = await anchorState();
+			const selectedPortId = String(req.body?.selectedPortId || "");
+			if (selectedPortId && !state.secondaryPorts.some((entry) => entry.id === selectedPortId)) {
+				return res.status(400).json({ error: "The selected tidal port is not available from Location Editor." });
+			}
+			state.tide.selectedPortId = selectedPortId;
+			await saveAnchorState(state);
+			const saved = await anchorState();
+			return res.json(publicAnchorState(saved, await tideStatus(false, saved), sharedService("ajrmMarineTides")?.configured === true));
+		}));
+		router.post("/anchor/tide-port/recommend", requireWrite(async (_req, res) => {
+			const position = app.getSelfPath?.("navigation.position");
+			if (!Number.isFinite(position?.latitude) || !Number.isFinite(position?.longitude)) {
+				return res.status(409).json({ error: "A current own-vessel position is needed to find a nearby secondary port." });
+			}
+			const tides = requireService("ajrmMarineTides", "tide");
+			if (typeof tides.recommendSecondary !== "function") {
+				return res.status(503).json({ error: "Update AJRM Marine Location Editor to use regional secondary-port selection." });
+			}
+			const recommendation = await tides.recommendSecondary({ position });
+			if (!recommendation?.port) {
+				const region = recommendation?.tidalRegion?.name;
+				return res.status(404).json({
+					error: region
+						? `No usable secondary port is recorded in ${region}.`
+						: "The vessel is not inside a configured tidal region.",
+				});
+			}
+			const state = await anchorState();
+			const selected = state.secondaryPorts.find((entry) => entry.locationId === recommendation.port.id);
+			if (!selected) return res.status(404).json({ error: "The recommended secondary port is not usable by the planner." });
+			state.tide.selectedPortId = selected.id;
+			await saveAnchorState(state);
+			const saved = await anchorState();
+			const value = publicAnchorState(saved, await tideStatus(false, saved), sharedService("ajrmMarineTides")?.configured === true);
+			value.tideRecommendation = {
+				portName: selected.name,
+				regionName: recommendation.tidalRegion?.name || "",
+				distanceM: recommendation.distanceM,
+				reason: recommendation.reason,
+			};
+			return res.json(value);
+		}));
 		router.put("/anchor/tide-data/settings", requireWrite(async (req, res) => {
 			const state = await anchorState();
 			state.tideData = {
@@ -228,12 +274,19 @@ module.exports = function ajrmMarinePlanning(app) {
 				ukhoApiKey: "",
 				events: [], cache: null,
 			};
-			await writeJson(anchorStateFile, state);
+			await saveAnchorState(state);
 			res.json(publicAnchorState(state, await tideStatus(false, state), sharedService("ajrmMarineTides")?.configured === true).tideData);
 		}));
 		router.post("/anchor/tide-data/refresh", requireWrite(async (req, res) => {
 			const state = await anchorState();
-			if (req.body?.selectedPortId != null) state.tide.selectedPortId = String(req.body.selectedPortId);
+			if (req.body?.selectedPortId != null) {
+				const selectedPortId = String(req.body.selectedPortId);
+				if (selectedPortId && !state.secondaryPorts.some((entry) => entry.id === selectedPortId)) {
+					return res.status(400).json({ error: "The selected tidal port is not available from Location Editor." });
+				}
+				state.tide.selectedPortId = selectedPortId;
+				await saveAnchorState(state);
+			}
 			res.json(publicAnchorState(state, await tideStatus(true, state), sharedService("ajrmMarineTides")?.configured === true).tideData);
 		}));
 		router.get("/anchor/live", (_req, res) => res.json(liveInputs()));
@@ -346,12 +399,13 @@ module.exports = function ajrmMarinePlanning(app) {
 	async function anchorState() {
 		const saved = await readJson(anchorStateFile, defaultAnchorState);
 		const savedTide = { ...(saved.tide || {}) };
-		// Bounded migration from the former single-standard-port state names.
+		// Keep only the selected port and reference levels from legacy planner
+		// state; entered HW/LW values are no longer an input source.
 		if (!savedTide.standardReferenceLevels && savedTide.obanReferenceLevels) savedTide.standardReferenceLevels = savedTide.obanReferenceLevels;
-		if (!savedTide.referencePort && savedTide.oban) savedTide.referencePort = savedTide.oban;
-		if (savedTide.source === "oban") savedTide.source = "referencePort";
 		delete savedTide.obanReferenceLevels;
 		delete savedTide.oban;
+		delete savedTide.referencePort;
+		delete savedTide.source;
 		return {
 			...clone(defaultAnchorState), ...saved,
 			tide: { ...clone(defaultAnchorState.tide), ...savedTide },
@@ -360,10 +414,19 @@ module.exports = function ajrmMarinePlanning(app) {
 		};
 	}
 
+	async function saveAnchorState(state) {
+		const value = clone(state);
+		delete value.secondaryPorts;
+		delete value.deletedSecondaryPortIds;
+		value.tideData = { ...(value.tideData || {}), ukhoApiKey: "", events: [], cache: null };
+		await writeJson(anchorStateFile, value);
+	}
+
 	async function tideStatus(force, state = null) {
 		const tides = sharedService("ajrmMarineTides");
 		if (!tides) return null;
 		const selected = state?.secondaryPorts?.find((entry) => entry.id === state?.tide?.selectedPortId);
+		if (!selected) return null;
 		const request = { includeEvents: true, portId: selected?.locationId };
 		return force ? tides.refresh(request) : tides.status(request);
 	}

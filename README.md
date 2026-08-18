@@ -1,10 +1,10 @@
 # AJRM Marine Planning
 
-Version `0.5.6` consumes Location Editor's centrally resolved standard or
-secondary-port events. Planning no longer reapplies a secondary correction in
-the browser when the shared Tide Resolver has already corrected the selected
-location. It accepts the flexible v2 time points used by Reeds-style tables for
-manual fallback calculations.
+Version `0.5.7` removes entered HW/LW values from Anchor Force. Select one of
+Location Editor's standard or secondary ports, or use own-vessel position to
+choose the nearest usable secondary port in the containing tidal region. The
+planner now uses only centrally resolved events and blanks tide-derived results
+when the selected port has no valid data.
 
 Version `0.5.5` completes shared tidal-data ownership. Gate Passage now reads
 all gate constants and each gate's standard-port relationship from Location
@@ -34,7 +34,7 @@ caching tier in Location Editor. Discovery-tier UKHO data is not persisted.
 
 Open **AJRM Marine Planning** from the Signal K webapps list and switch between
 the two planners using the buttons in the header. Calculation constants and
-manual overrides persist in Planning's Signal K data directory. Standard ports,
+the selected Anchor Force tidal port persist in Planning's Signal K data directory. Standard ports,
 secondary-port corrections and tidal-gate constants are edited in Location
 Editor, not in Planning.
 

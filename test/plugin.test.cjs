@@ -31,6 +31,7 @@ async function fixture(t) {
 	} } };
 	const secondaryPort = {
 		id: "tobermory-location", name: "Tobermory", types: ["tidalSecondaryPort"],
+		feature: { geometry: { type: "Point", coordinates: [-6.06, 56.62] } },
 		properties: { tide: {
 			parentLocationRef: "/resources/locations/oban",
 			secondaryPortCorrections: {
@@ -54,14 +55,17 @@ async function fixture(t) {
 		source: { cache: "hit", fetchedAt: "2026-08-18T00:00:00.000Z" },
 		freshness: { state: "fresh", staleAfterSeconds: 3600 }, error: "",
 	};
+	const tidalRegion = { id: "west-region", name: "West Scotland", types: ["tidalRegion"] };
 	const app = {
 		getDataDirPath: () => directory, setPluginStatus() {}, handleMessage() {},
-		ajrmMarineLocations: { contract: "ajrm-marine-locations-service-v1", async list() { return [gate, oban, secondaryPort]; } },
+		getSelfPath(pathName) { return pathName === "navigation.position" ? { latitude: 56.62, longitude: -6.05 } : null; },
+		ajrmMarineLocations: { contract: "ajrm-marine-locations-service-v1", async list() { return [gate, oban, secondaryPort, tidalRegion]; } },
 		ajrmMarineTides: {
 			contract: "ajrm-marine-tides-service-v1",
 			configured: true,
-			async status(value) { calls.tide.push(value); return tideResult; },
-			async refresh(value) { calls.tide.push(value); return tideResult; },
+			async status(value) { calls.tide.push(value); return { ...tideResult, selectedPort: { id: value.portId, name: "Tobermory" } }; },
+			async refresh(value) { calls.tide.push(value); return { ...tideResult, selectedPort: { id: value.portId, name: "Tobermory" } }; },
+			async recommendSecondary() { return { port: secondaryPort, tidalRegion, distanceM: 850, reason: "nearestSecondaryPortInTidalRegion" }; },
 		},
 		ajrmMarineWeather: {
 			contract: "ajrm-marine-weather-service-v1",
@@ -116,13 +120,41 @@ test("gate weather and tides resolve Location Editor services registered by anot
 
 test("anchor state contains no API secret and uses shared tide events", async (t) => {
 	const { call, plugin } = await fixture(t);
-	const result = await call("GET", "/anchor/state");
+	let result = await call("GET", "/anchor/state");
+	assert.deepEqual(result.body.tideData.events, []);
+	result = await call("PUT", "/anchor/tide-port", { body: { selectedPortId: "tobermory" } });
 	assert.equal(result.body.tideData.ukhoApiKey, undefined);
 	assert.equal(result.body.tideData.managedBy, "AJRM Marine Location Editor");
 	assert.equal(result.body.tideData.events[0].Height, 3.2);
 	assert.equal(result.body.tideData.events[0].DateTime, "2026-08-18T12:00:00.000Z");
 	assert.deepEqual(result.body.secondaryPorts.map((port) => port.id), ["oban", "tobermory"]);
 	assert.equal(result.body.secondaryPorts[1].locationId, "tobermory-location");
+	plugin.stop();
+});
+
+test("anchor selects the nearest secondary port in the vessel's tidal region", async (t) => {
+	const { call, plugin } = await fixture(t);
+	const result = await call("POST", "/anchor/tide-port/recommend");
+	assert.equal(result.statusCode, 200);
+	assert.equal(result.body.tide.selectedPortId, "tobermory");
+	assert.equal(result.body.tideRecommendation.portName, "Tobermory");
+	assert.equal(result.body.tideRecommendation.regionName, "West Scotland");
+	assert.equal(result.body.tideRecommendation.distanceM, 850);
+	plugin.stop();
+});
+
+test("anchor clears tide figures when the selected port cannot resolve", async (t) => {
+	const { app, call, plugin } = await fixture(t);
+	await call("PUT", "/anchor/tide-port", { body: { selectedPortId: "tobermory" } });
+	app.ajrmMarineTides.status = async ({ portId }) => ({
+		valid: false,
+		selectedPort: { id: portId, name: "Tobermory" },
+		error: "No prediction data are available.",
+	});
+	const result = await call("GET", "/anchor/state");
+	assert.deepEqual(result.body.tideData.events, []);
+	assert.equal(result.body.tideData.stationName, "Tobermory");
+	assert.equal(result.body.tideData.error, "No prediction data are available.");
 	plugin.stop();
 });
 

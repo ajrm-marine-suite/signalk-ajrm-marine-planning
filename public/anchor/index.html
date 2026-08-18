@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Anchor Force Planner</title>
-    <link rel="stylesheet" href="styles.css?v=0.5.5">
+    <link rel="stylesheet" href="styles.css?v=0.5.7">
   </head>
   <body>
     <header class="topbar">
@@ -21,7 +21,7 @@
 
       <nav class="tabs" aria-label="Planner tabs">
         <button class="tabButton active" type="button" data-tab="planner" title="Main anchoring planner: enter conditions, choose a tide view, and see rode, clearance, catenary, and anchor holding checks.">Planner</button>
-        <button class="tabButton" type="button" data-tab="tide" title="Manual tide entry and tide-location selection. Shows current tide rise, spring percentage, keel clearance, and tide curve.">Tide</button>
+        <button class="tabButton" type="button" data-tab="tide" title="Select a Location Editor tidal port and inspect its tide rise, spring percentage, keel clearance, and tide curve.">Tide</button>
         <button class="tabButton" type="button" data-tab="tideData" title="Fetch and inspect downloaded tide events for the selected standard port from the configured tide API.">Tide Data</button>
         <button class="tabButton" type="button" data-tab="settings" title="Boat constants, ground tackle, echo-sounder mode, API settings, and save/reset controls.">Settings</button>
         <button class="tabButton" type="button" data-tab="force" title="Wind force lookup table and curve using the current boat windage settings.">Wind Force</button>
@@ -124,54 +124,37 @@
         <div class="panelHeader">
           <div>
             <h2>Tide</h2>
-            <p>Enter reference-port tide data, then optionally apply a tide-location correction maintained in AJRM Marine Location Editor.</p>
+            <p>Select a standard or secondary tidal port maintained in AJRM Marine Location Editor. The planner uses its resolved predictions directly.</p>
           </div>
         </div>
         <section class="inputPanel settingsPanel" aria-label="Tide settings">
           <div class="depthSourcePanel tideSourcePanel" aria-label="Tide source">
-            <div class="depthSourceButtons" role="group" aria-label="Tide source used in calculations">
-              <button class="depthSourceButton tideSourceButton active" type="button" data-tide-source="referencePort" title="Use the entered reference-port HW/LW times and heights in all tide calculations.">Use entered values</button>
-              <button class="depthSourceButton tideSourceButton" type="button" data-tide-source="secondary" title="Use the selected tide location's calculated HW/LW times and heights in all tide calculations.">Use tide location</button>
-            </div>
-            <label title="Saved tide-location correction to apply to the selected standard-port values.">Tide location
+            <label title="Standard and secondary prediction ports supplied by AJRM Marine Location Editor.">Tidal port
               <select id="secondaryPortSelect">
-                <option value="">No tide location selected</option>
+                <option value="">Select a tidal port</option>
               </select>
             </label>
+            <button id="recommendSecondaryPort" type="button" title="Use own-vessel position to select the nearest secondary port within the containing tidal region.">Choose nearest secondary port</button>
           </div>
-          <h3>Reference port</h3>
-          <div class="inputGrid settingsGrid">
-            <label title="High-water time nearest the anchoring period, shown in the Tide Data display-time setting. UKHO downloaded times are stored internally as UT.">HW time
-              <span class="inputWithUnit"><input id="hwTime" type="time" value="15:00"><span id="hwTimeUnit">UT</span></span>
-            </label>
-            <label title="Low-water time nearest the anchoring period, shown in the Tide Data display-time setting. The app interpolates between LW and HW using the rule of twelfths.">LW time
-              <span class="inputWithUnit"><input id="lwTime" type="time" value="09:00"><span id="lwTimeUnit">UT</span></span>
-            </label>
-            <label title="Predicted high-water height above chart datum. Used for deepest-water rode geometry and anchor-drag checks.">HW height
-              <span class="inputWithUnit"><input id="hwHeight" type="number" value="4" min="-2" max="15" step="0.1"><span>m</span></span>
-            </label>
-            <label title="Predicted low-water height above chart datum. Used for grounding and minimum keel-clearance checks.">LW height
-              <span class="inputWithUnit"><input id="lwHeight" type="number" value="1" min="-2" max="15" step="0.1"><span>m</span></span>
-            </label>
-          </div>
+          <p id="tidePortSelectionStatus" class="mutedText" aria-live="polite">Choose a port or use own-vessel position to find the nearest regional secondary port.</p>
           <section class="secondaryPreview" aria-label="Calculated tide location tide">
             <div class="panelHeader">
               <div>
-                <h3>Calculated tide location</h3>
-                <p>Live calculation from the selected location's saved corrections.</p>
+                <h3>Selected port prediction</h3>
+                <p>Resolved centrally by Location Editor; secondary-port corrections are already included.</p>
               </div>
             </div>
             <section class="tideSummary compactSummary" aria-live="polite">
-              <div title="Calculated high-water time after applying the selected tide location's HW correction to its reference port."><span>HW time</span><strong id="secondaryHwTime">-</strong></div>
-              <div title="Calculated low-water time after applying the selected tide location's LW correction to its reference port."><span>LW time</span><strong id="secondaryLwTime">-</strong></div>
-              <div title="Calculated tide-location high-water height after interpolating height differences."><span>HW height</span><strong id="secondaryHwHeight">-</strong></div>
-              <div title="Calculated tide-location low-water height after interpolating height differences."><span>LW height</span><strong id="secondaryLwHeight">-</strong></div>
+              <div title="Resolved high-water time for the selected port."><span>HW time</span><strong id="secondaryHwTime">-</strong></div>
+              <div title="Resolved low-water time for the selected port."><span>LW time</span><strong id="secondaryLwTime">-</strong></div>
+              <div title="Resolved high-water height for the selected port."><span>HW height</span><strong id="secondaryHwHeight">-</strong></div>
+              <div title="Resolved low-water height for the selected port."><span>LW height</span><strong id="secondaryLwHeight">-</strong></div>
             </section>
           </section>
         </section>
         <section id="tideSummary" class="tideSummary" aria-live="polite">
           <div title="The actual clock time used for the Tide tab's present-time calculation."><span>Time now</span><strong id="currentTimeLabel">-</strong></div>
-          <div title="Estimated current tide height above chart datum from downloaded events or entered HW/LW values."><span>Tide rise now</span><strong id="currentRiseLabel">-</strong></div>
+          <div title="Estimated current tide height above chart datum from the selected port's resolved events."><span>Tide rise now</span><strong id="currentRiseLabel">-</strong></div>
           <div title="How spring-like the current tide range is, based on the selected reference-port levels. Values can be below 0% or above 100%."><span>% Spring</span><strong id="springPercentLabel">-</strong></div>
           <div title="Estimated depth beneath keel right now using the selected depth source."><span>Keel clearance now</span><strong id="currentDepthLabel">-</strong></div>
           <div title="Predicted depth beneath keel at the relevant low water for the Tide tab. This is the grounding check on this tab."><span>Low-water clearance</span><strong id="lowWaterClearanceLabel">-</strong></div>
@@ -387,6 +370,6 @@
       </section>
     </main>
 
-    <script src="app.js?v=0.5.5"></script>
+    <script src="app.js?v=0.5.7"></script>
   </body>
 </html>

@@ -1,5 +1,5 @@
 /** Browser-side anchor load, rode, scope, clearance and catenary model. */
-const webVersion = "0.5.5";
+const webVersion = "0.5.7";
 const halfCycleMinutes = 12 * 60 + 25;
 
 const defaults = {
@@ -30,14 +30,9 @@ const defaults = {
   underwaterDragFactor: 0.40
 };
 
-const timeDefaults = {
-  hwTime: "15:00",
-  lwTime: "09:00"
-};
-
 const savedSettingsKey = "anchorForcePlanner.settings.v1";
 const ids = Object.keys(defaults);
-const allInputIds = [...ids, ...Object.keys(timeDefaults)];
+const allInputIds = [...ids];
 const checkboxIds = ["echoMeasuresBelowKeel"];
 let depthSource = "chart";
 let idealRode = null;
@@ -45,19 +40,12 @@ let selectedTideViewKey = "now";
 let saveSettingsTimer = null;
 let serverState = {
   tide: {
-    source: "referencePort",
     selectedPortId: "",
     standardReferenceLevels: {
       mhws: 4.0,
       mhwn: 2.9,
       mlwn: 1.8,
       mlws: 0.7
-    },
-    referencePort: {
-      hwTime: "15:00",
-      lwTime: "09:00",
-      hwHeight: 4,
-      lwHeight: 1
     }
   },
   secondaryPorts: [],
@@ -72,7 +60,6 @@ let serverState = {
     cache: null
   }
 };
-let saveServerStateTimer = null;
 
 function escapeHtml(value) {
   const div = document.createElement("div");
@@ -151,7 +138,7 @@ function todayIsoDateForMode() {
 }
 
 function referencePortDate() {
-  return serverState.tide.referencePort.date || todayIsoDateForMode();
+  return todayIsoDateForMode();
 }
 
 function timeFromUtcForDisplay(utTime, date = referencePortDate()) {
@@ -159,21 +146,6 @@ function timeFromUtcForDisplay(utTime, date = referencePortDate()) {
   const parsed = new Date(`${date}T${utTime || "00:00"}:00Z`);
   if (Number.isNaN(parsed.getTime())) return utTime || "00:00";
   return `${String(parsed.getHours()).padStart(2, "0")}:${String(parsed.getMinutes()).padStart(2, "0")}`;
-}
-
-function timeFromDisplayToUtc(displayTime, date = referencePortDate()) {
-  if (displayTimeMode() !== "local") return displayTime || "00:00";
-  const [hours, minutes] = String(displayTime || "00:00").split(":").map(Number);
-  const [year, month, day] = String(date || todayIsoDateForMode()).split("-").map(Number);
-  const parsed = new Date(
-    Number.isFinite(year) ? year : new Date().getFullYear(),
-    (Number.isFinite(month) ? month : 1) - 1,
-    Number.isFinite(day) ? day : 1,
-    Number.isFinite(hours) ? hours : 0,
-    Number.isFinite(minutes) ? minutes : 0,
-    0
-  );
-  return `${String(parsed.getUTCHours()).padStart(2, "0")}:${String(parsed.getUTCMinutes()).padStart(2, "0")}`;
 }
 
 function eventDisplayParts(event) {
@@ -305,7 +277,6 @@ function currentSettings() {
   return {
     inputs: Object.fromEntries(ids.map((id) => [id, document.getElementById(id).value])),
     checkboxes: Object.fromEntries(checkboxIds.map((id) => [id, document.getElementById(id).checked])),
-    times: Object.fromEntries(Object.keys(timeDefaults).map((id) => [id, document.getElementById(id).value])),
     depthSource
   };
 }
@@ -324,10 +295,6 @@ function applySettings(settings = {}) {
     const input = document.getElementById(id);
     if (input) input.value = value;
   });
-  Object.entries({ ...timeDefaults, ...(settings.times || {}) }).forEach(([id, value]) => {
-    const input = document.getElementById(id);
-    if (input) input.value = value;
-  });
   document.getElementById("echoMeasuresBelowKeel").checked = settings.checkboxes?.echoMeasuresBelowKeel ?? true;
   depthSource = settings.depthSource === "sounder" ? "sounder" : "chart";
   document.querySelectorAll(".depthSourceButton").forEach((item) => item.classList.toggle("active", item.dataset.depthSource === depthSource));
@@ -341,17 +308,14 @@ function mergeServerState(state = {}) {
       standardReferenceLevels: {
         ...serverState.tide.standardReferenceLevels,
         ...(state.tide?.standardReferenceLevels || {})
-      },
-      referencePort: {
-        ...serverState.tide.referencePort,
-        ...(state.tide?.referencePort || {})
       }
     },
     secondaryPorts: Array.isArray(state.secondaryPorts) ? state.secondaryPorts : [],
     tideData: {
       ...serverState.tideData,
       ...(state.tideData || {})
-    }
+    },
+    tideRecommendation: state.tideRecommendation || null
   };
 }
 
@@ -365,141 +329,12 @@ async function loadServerState() {
   }
 }
 
-function saveServerStateSoon() {
-  clearTimeout(saveServerStateTimer);
-  saveServerStateTimer = setTimeout(async () => {
-    try {
-      await fetch("/plugins/signalk-ajrm-marine-planning/anchor/state", {
-        method: "PUT",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(serverState)
-      });
-    } catch {
-      // The About tab makes stale or unavailable server state visible.
-    }
-  }, 350);
-}
-
-function referencePortTideFromFields() {
-  const date = referencePortDate();
-  return {
-    date,
-    hwTime: timeFromDisplayToUtc(document.getElementById("hwTime").value || "00:00", date),
-    lwTime: timeFromDisplayToUtc(document.getElementById("lwTime").value || "00:00", date),
-    hwHeight: number("hwHeight"),
-    lwHeight: number("lwHeight")
-  };
-}
-
 function selectedSecondaryPort() {
   return serverState.secondaryPorts.find((port) => port.id === serverState.tide.selectedPortId) || null;
 }
 
-function springFactor(height, neapHeight, springHeight) {
-  const range = springHeight - neapHeight;
-  if (!Number.isFinite(range) || Math.abs(range) < 0.01) return 0;
-  return (height - neapHeight) / range;
-}
-
-function lowWaterSpringFactor(height, neapHeight, springHeight) {
-  const range = neapHeight - springHeight;
-  if (!Number.isFinite(range) || Math.abs(range) < 0.01) return 0;
-  return (neapHeight - height) / range;
-}
-
-function interpolateOffset(neapOffset, springOffset, factor) {
-  return Number(neapOffset || 0) + (Number(springOffset || 0) - Number(neapOffset || 0)) * factor;
-}
-
-function offsetKey(hour) {
-  return `t${String(hour).padStart(4, "0")}`;
-}
-
-function legacyOffsets(port, type) {
-  if (type === "hw") {
-    const spring = Number(port.hwSpringOffset ?? port.hwTimeOffset ?? 0);
-    const neap = Number(port.hwNeapOffset ?? port.hwTimeOffset ?? 0);
-    return { t0000: spring, t0600: neap, t1200: spring, t1800: neap };
-  }
-  const spring = Number(port.lwSpringOffset ?? port.lwTimeOffset ?? 0);
-  const neap = Number(port.lwNeapOffset ?? port.lwTimeOffset ?? 0);
-  return { t0000: spring, t0600: neap, t1200: spring, t1800: neap };
-}
-
-function portOffsets(port, type) {
-	const points = type === "hw" ? port.hwOffsetPoints : port.lwOffsetPoints;
-	if (Array.isArray(points) && points.length) return points;
-	const source = type === "hw" ? port.hwOffsets : port.lwOffsets;
-	return { ...legacyOffsets(port, type), ...(source || {}) };
-}
-
-function portHeightDiffs(port) {
-  if (port.heightDiffs) return port.heightDiffs;
-  const reference = serverState.tide.standardReferenceLevels;
-  return {
-    mhws: Number(port.mhws || 0) - Number(reference.mhws || 0),
-    mhwn: Number(port.mhwn || 0) - Number(reference.mhwn || 0),
-    mlwn: Number(port.mlwn || 0) - Number(reference.mlwn || 0),
-    mlws: Number(port.mlws || 0) - Number(reference.mlws || 0)
-  };
-}
-
-function portStandardPort(port) {
-  return port.standardPort || "Selected standard port";
-}
-
 function portReferenceLevels(port) {
   return port.standardReferenceLevels || serverState.tide.standardReferenceLevels;
-}
-
-function interpolateTimeOffset(offsets, minutes) {
-	const points = Array.isArray(offsets) ? offsets.map((point) => ({
-		minute: Number(point.referenceTimeMinutes), value: Number(point.offsetMinutes)
-	})).sort((left, right) => left.minute - right.minute) : [
-    { minute: 0, value: Number(offsets.t0000 || 0) },
-    { minute: 360, value: Number(offsets.t0600 || 0) },
-    { minute: 720, value: Number(offsets.t1200 || 0) },
-    { minute: 1080, value: Number(offsets.t1800 || 0) },
-    { minute: 1440, value: Number(offsets.t0000 || 0) }
-	];
-	if (!points.length) return 0;
-	if (points.length === 1) return points[0].value;
-	const circular = [...points, { minute: points[0].minute + 1440, value: points[0].value }];
-  const normalized = ((minutes % 1440) + 1440) % 1440;
-	const candidate = normalized < circular[0].minute ? normalized + 1440 : normalized;
-	let before = circular[0];
-	let after = circular[circular.length - 1];
-	for (let index = 0; index < circular.length - 1; index += 1) {
-		if (circular[index].minute <= candidate && candidate <= circular[index + 1].minute) {
-			before = circular[index];
-			after = circular[index + 1];
-			break;
-		}
-  }
-  const span = Math.max(1, after.minute - before.minute);
-	return before.value + ((after.value - before.value) * (candidate - before.minute)) / span;
-}
-
-function secondaryTideValues(port = selectedSecondaryPort(), referencePort = serverState.tide.referencePort) {
-  if (!port) return { ...referencePort };
-  const reference = portReferenceLevels(port);
-  const hwFactor = springFactor(Number(referencePort.hwHeight || 0), Number(reference.mhwn || 0), Number(reference.mhws || 0));
-  const lwFactor = lowWaterSpringFactor(Number(referencePort.lwHeight || 0), Number(reference.mlwn || 0), Number(reference.mlws || 0));
-  const hwTimeOffset = interpolateTimeOffset(portOffsets(port, "hw"), timeToMinutes(referencePort.hwTime));
-  const lwTimeOffset = interpolateTimeOffset(portOffsets(port, "lw"), timeToMinutes(referencePort.lwTime));
-  const heightDiffs = portHeightDiffs(port);
-  const hwHeightDiff = interpolateOffset(heightDiffs.mhwn, heightDiffs.mhws, hwFactor);
-  const lwHeightDiff = interpolateOffset(heightDiffs.mlwn, heightDiffs.mlws, lwFactor);
-  const date = referencePort.date || referencePortDate();
-  const hwTimeUtc = minutesToTime(timeToMinutes(referencePort.hwTime) + hwTimeOffset);
-  const lwTimeUtc = minutesToTime(timeToMinutes(referencePort.lwTime) + lwTimeOffset);
-  return {
-    date,
-    hwTime: timeFromUtcForDisplay(hwTimeUtc, date),
-    lwTime: timeFromUtcForDisplay(lwTimeUtc, date),
-    hwHeight: round(Number(referencePort.hwHeight || 0) + hwHeightDiff, 1),
-    lwHeight: round(Number(referencePort.lwHeight || 0) + lwHeightDiff, 1)
-  };
 }
 
 function downloadedReferencePortCycle(now = new Date()) {
@@ -533,7 +368,14 @@ function downloadedReferencePortCycle(now = new Date()) {
 
 function referencePortTideValuesForNow(now = new Date()) {
   const cycle = downloadedReferencePortCycle(now);
-  if (!cycle) return { ...serverState.tide.referencePort, downloaded: false };
+  if (!cycle) return {
+    date: todayIsoDateForMode(),
+    hwTime: "",
+    lwTime: "",
+    hwHeight: Number.NaN,
+    lwHeight: Number.NaN,
+    downloaded: false
+  };
   return {
     date: eventDate(cycle.hw),
     hwTime: eventTime(cycle.hw),
@@ -547,9 +389,6 @@ function referencePortTideValuesForNow(now = new Date()) {
 
 function activeTideValues(now = new Date()) {
   const referencePort = referencePortTideValuesForNow(now);
-	const selected = selectedSecondaryPort();
-	const centrallyResolved = referencePort.downloaded && selected && serverState.tideData.resolvedLocationId === selected.locationId;
-	if (serverState.tide.source === "secondary" && !centrallyResolved) return secondaryTideValues(selected, referencePort);
   const date = referencePort.date || referencePortDate();
   return {
     ...referencePort,
@@ -1008,26 +847,14 @@ function clearIdealRodeRecommendation() {
 }
 
 function applyServerStateToTideFields() {
-  const referencePort = referencePortTideValuesForNow();
-  const reference = serverState.tide.standardReferenceLevels;
-  const date = referencePort.date || referencePortDate();
-  document.getElementById("hwTime").value = timeFromUtcForDisplay(referencePort.hwTime || "15:00", date);
-  document.getElementById("lwTime").value = timeFromUtcForDisplay(referencePort.lwTime || "09:00", date);
-  document.getElementById("hwHeight").value = referencePort.hwHeight ?? 4;
-  document.getElementById("lwHeight").value = referencePort.lwHeight ?? 1;
-  document.getElementById("hwTimeUnit").textContent = timeBasisLabel();
-  document.getElementById("lwTimeUnit").textContent = timeBasisLabel();
   document.getElementById("secondaryPortSelect").value = serverState.tide.selectedPortId || "";
-  document.querySelectorAll(".tideSourceButton").forEach((button) => {
-    button.classList.toggle("active", button.dataset.tideSource === serverState.tide.source);
-  });
   renderSecondaryTidePreview();
 }
 
 function renderSecondaryPortOptions() {
   const select = document.getElementById("secondaryPortSelect");
   select.innerHTML = [
-    `<option value="">No tide location selected</option>`,
+    `<option value="">Select a tidal port</option>`,
     ...serverState.secondaryPorts
       .slice()
       .sort((a, b) => a.name.localeCompare(b.name))
@@ -1038,17 +865,16 @@ function renderSecondaryPortOptions() {
 
 function renderSecondaryTidePreview() {
   const port = selectedSecondaryPort();
-  if (!port && serverState.tide.source === "secondary") serverState.tide.source = "referencePort";
-  const showSecondary = Boolean(port && serverState.tide.source === "secondary");
-  const secondary = secondaryTideValues(port);
-  document.getElementById("secondaryHwTime").textContent = showSecondary ? secondary.hwTime : "-";
-  document.getElementById("secondaryLwTime").textContent = showSecondary ? secondary.lwTime : "-";
-  document.getElementById("secondaryHwHeight").textContent = showSecondary ? fmt(secondary.hwHeight, 1, " m") : "-";
-  document.getElementById("secondaryLwHeight").textContent = showSecondary ? fmt(secondary.lwHeight, 1, " m") : "-";
-  document.querySelector('[data-tide-source="secondary"]').disabled = !port;
-  document.querySelectorAll(".tideSourceButton").forEach((button) => {
-    button.classList.toggle("active", button.dataset.tideSource === serverState.tide.source);
-  });
+  const tide = activeTideValues();
+  const available = Boolean(port && tide.downloaded && serverState.tideData.resolvedLocationId === port.locationId);
+  document.getElementById("secondaryHwTime").textContent = available ? tide.hwTime : "-";
+  document.getElementById("secondaryLwTime").textContent = available ? tide.lwTime : "-";
+  document.getElementById("secondaryHwHeight").textContent = available ? fmt(tide.hwHeight, 1, " m") : "-";
+  document.getElementById("secondaryLwHeight").textContent = available ? fmt(tide.lwHeight, 1, " m") : "-";
+  const recommendation = serverState.tideRecommendation;
+  document.getElementById("tidePortSelectionStatus").textContent = recommendation
+    ? `${recommendation.portName} selected as the nearest secondary port in ${recommendation.regionName || "the current tidal region"} (${fmt(Number(recommendation.distanceM) / 1852, 1, " NM")}).`
+    : port ? `${port.name} selected manually.` : "Choose a port or use own-vessel position to find the nearest regional secondary port.";
 }
 
 function renderSecondaryPortManager() {
@@ -1138,11 +964,6 @@ function renderTideDataManager() {
   }).join("");
 }
 
-function persistTideStateFromFields() {
-  serverState.tide.referencePort = referencePortTideFromFields();
-  saveServerStateSoon();
-}
-
 function formatClock(date) {
   if (displayTimeMode() === "ut") {
     return `${String(date.getUTCHours()).padStart(2, "0")}:${String(date.getUTCMinutes()).padStart(2, "0")} UT`;
@@ -1167,35 +988,13 @@ function tideHeightBetween(before, after, minute) {
   return before.height - (before.height - after.height) * fraction;
 }
 
-function secondaryEventFromReferencePortEvent(port, event) {
-  const type = eventTypeShort(event);
-  const height = eventHeight(event);
-  const reference = portReferenceLevels(port);
-  const heightDiffs = portHeightDiffs(port);
-  if (type === "HW") {
-    const factor = springFactor(height, Number(reference.mhwn || 0), Number(reference.mhws || 0));
-    return {
-      type,
-      timestamp: eventTimestamp(event) + interpolateTimeOffset(portOffsets(port, "hw"), timeToMinutes(eventTime(event))) * 60000,
-      height: height + interpolateOffset(heightDiffs.mhwn, heightDiffs.mhws, factor)
-    };
-  }
-  const factor = lowWaterSpringFactor(height, Number(reference.mlwn || 0), Number(reference.mlws || 0));
-  return {
-    type,
-    timestamp: eventTimestamp(event) + interpolateTimeOffset(portOffsets(port, "lw"), timeToMinutes(eventTime(event))) * 60000,
-    height: height + interpolateOffset(heightDiffs.mlwn, heightDiffs.mlws, factor)
-  };
-}
-
 function activeTideTimeline(date = new Date()) {
   const events = sortedTideEvents().filter((event) => Number.isFinite(eventTimestamp(event)) && Number.isFinite(eventHeight(event)));
   if (events.length < 2) return null;
-  const port = serverState.tide.source === "secondary" ? selectedSecondaryPort() : null;
   const dayStart = displayDayStart(date);
   const timeline = events
     .map((event) => {
-      const corrected = port ? secondaryEventFromReferencePortEvent(port, event) : {
+      const corrected = {
         type: eventTypeShort(event),
         timestamp: eventTimestamp(event),
         height: eventHeight(event)
@@ -1210,17 +1009,8 @@ function activeTideTimeline(date = new Date()) {
   return timeline.length >= 2 ? timeline : null;
 }
 
-function fallbackTideTimeline(date = new Date()) {
-  const tide = activeTideValues(date);
-  const dayStart = displayDayStart(date);
-  return tideEventsForRange(tide, -1500, 3300).map((event) => ({
-    ...event,
-    timestamp: dayStart + event.minute * 60000
-  }));
-}
-
 function plannerTideTimeline(date = new Date()) {
-  return activeTideTimeline(date) || fallbackTideTimeline(date);
+  return activeTideTimeline(date) || [];
 }
 
 function tideBracketFromTimeline(timeline, date = new Date()) {
@@ -1244,8 +1034,8 @@ function bracketingActiveTideEvents(now = new Date()) {
 
 function tideEventsForRange(tide, startMinute, endMinute) {
   const baseEvents = [
-    { type: "HW", minute: timeToMinutes(tide.hwTime), height: Number(tide.hwHeight || 0) },
-    { type: "LW", minute: timeToMinutes(tide.lwTime), height: Number(tide.lwHeight || 0) }
+    { type: "HW", minute: timeToMinutes(tide.hwTime), height: Number(tide.hwHeight) },
+    { type: "LW", minute: timeToMinutes(tide.lwTime), height: Number(tide.lwHeight) }
   ];
   const events = [];
   for (const shift of [-3, -2, -1, 0, 1, 2, 3]) {
@@ -1263,7 +1053,7 @@ function tideAtMinute(tide, minute, timeline = null) {
       return tideHeightBetween(events[index], events[index + 1], minute);
     }
   }
-  return Number(tide.lwHeight || 0);
+  return Number(tide.lwHeight);
 }
 
 function tideViewEventKey(event) {
@@ -1371,11 +1161,21 @@ function currentTide(now = new Date()) {
 }
 
 function updateTideSummary() {
+  const status = document.getElementById("tideStatus");
+  status.className = "statusBanner";
+  if (!activeTideTimeline(new Date())) {
+    document.getElementById("currentTimeLabel").textContent = "-";
+    document.getElementById("currentRiseLabel").textContent = "-";
+    document.getElementById("springPercentLabel").textContent = "-";
+    document.getElementById("currentDepthLabel").textContent = "-";
+    document.getElementById("lowWaterClearanceLabel").textContent = "-";
+    status.classList.add("warning");
+    status.textContent = serverState.tideData.error || "No resolved tide predictions are available for the selected port.";
+    return null;
+  }
   const tide = currentTide(new Date());
   const spring = springPercentageForNow();
-  const tideSourceLabel = serverState.tide.source === "secondary" && selectedSecondaryPort()
-    ? selectedSecondaryPort().name
-    : "entered reference-port";
+  const tideSourceLabel = selectedSecondaryPort()?.name || "no selected port";
   document.getElementById("tideHeight").value = round(tide.height, 1);
   document.getElementById("currentTimeLabel").textContent = formatClock(tide.now);
   document.getElementById("currentRiseLabel").textContent = `${fmt(tide.height, 1, " m")} ${tide.phase.toLowerCase()}`;
@@ -1383,8 +1183,6 @@ function updateTideSummary() {
   document.getElementById("currentDepthLabel").textContent = fmt(tide.keelClearance, 1, " m");
   document.getElementById("lowWaterClearanceLabel").textContent = fmt(tide.lowWaterClearance, 1, " m");
 
-  const status = document.getElementById("tideStatus");
-  status.className = "statusBanner";
   if (tide.lowWaterClearance < 0) {
     status.classList.add("danger");
     status.textContent = `Grounding risk at low water: predicted depth is ${fmt(Math.abs(tide.lowWaterClearance), 1, " m")} below draft.`;
@@ -1671,11 +1469,16 @@ function renderTideCurve() {
   if (!target) return;
   target.innerHTML = "";
   const tide = activeTideValues();
-  const tideSourceLabel = serverState.tide.source === "secondary" && selectedSecondaryPort()
-    ? selectedSecondaryPort().name
-    : "entered reference-port";
+  const tideSourceLabel = selectedSecondaryPort()?.name || "no selected port";
   const now = new Date();
   const timeline = activeTideTimeline(now);
+  if (!timeline) {
+    target.append(
+      svg("rect", { x: 0, y: 0, width: 820, height: 280, fill: "#ffffff" }),
+      svg("text", { x: 410, y: 140, fill: "#64727d", "font-size": 17, "text-anchor": "middle" }, [document.createTextNode("No tide prediction data for the selected port")])
+    );
+    return;
+  }
   const nowMinutes = nowMinutesForDisplayMode(now);
   const width = 680;
   const height = 170;
@@ -1799,9 +1602,6 @@ document.querySelectorAll(".depthSourceButton").forEach((button) => {
 
 allInputIds.forEach((id) => {
   document.getElementById(id).addEventListener("input", () => {
-    if (["hwTime", "lwTime", "hwHeight", "lwHeight"].includes(id)) {
-      persistTideStateFromFields();
-    }
     idealRode = null;
     clearIdealRodeRecommendation();
     renderAll();
@@ -1846,26 +1646,49 @@ document.getElementById("resetDefaults").addEventListener("click", () => {
   renderAll();
 });
 
-document.querySelectorAll(".tideSourceButton").forEach((button) => {
-  button.addEventListener("click", () => {
-    if (button.dataset.tideSource === "secondary" && !selectedSecondaryPort()) return;
-    serverState.tide.source = button.dataset.tideSource;
-    document.querySelectorAll(".tideSourceButton").forEach((item) => item.classList.toggle("active", item === button));
-    idealRode = null;
-    clearIdealRodeRecommendation();
-    saveServerStateSoon();
-    renderAll();
-  });
-});
-
-document.getElementById("secondaryPortSelect").addEventListener("change", (event) => {
-  serverState.tide.selectedPortId = event.target.value;
-  if (!selectedSecondaryPort() && serverState.tide.source === "secondary") serverState.tide.source = "referencePort";
+async function selectTidePort(selectedPortId) {
+  serverState.tide.selectedPortId = selectedPortId;
+  serverState.tideRecommendation = null;
+  serverState.tideData = { ...serverState.tideData, events: [], cache: null, resolvedLocationId: null, error: "Loading selected tidal port…" };
   idealRode = null;
   clearIdealRodeRecommendation();
-  saveServerStateSoon();
+  renderAll();
+  const response = await fetch("/plugins/signalk-ajrm-marine-planning/anchor/tide-port", {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ selectedPortId })
+  });
+  const value = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(value.error || `server returned ${response.status}`);
+  serverState = mergeServerState(value);
   applyServerStateToTideFields();
   renderAll();
+}
+
+document.getElementById("secondaryPortSelect").addEventListener("change", async (event) => {
+  try {
+    await selectTidePort(event.target.value);
+  } catch (error) {
+    document.getElementById("tidePortSelectionStatus").textContent = `Selection failed: ${error.message}`;
+  }
+});
+
+document.getElementById("recommendSecondaryPort").addEventListener("click", async () => {
+  const button = document.getElementById("recommendSecondaryPort");
+  try {
+    button.disabled = true;
+    document.getElementById("tidePortSelectionStatus").textContent = "Finding the nearest secondary port in the current tidal region…";
+    const response = await fetch("/plugins/signalk-ajrm-marine-planning/anchor/tide-port/recommend", { method: "POST" });
+    const value = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(value.error || `server returned ${response.status}`);
+    serverState = mergeServerState(value);
+    applyServerStateToTideFields();
+    renderAll();
+  } catch (error) {
+    document.getElementById("tidePortSelectionStatus").textContent = `Automatic selection failed: ${error.message}`;
+  } finally {
+    button.disabled = false;
+  }
 });
 
 document.getElementById("saveTideDataSettings").addEventListener("click", async () => {
