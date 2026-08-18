@@ -1,6 +1,6 @@
 /** Browser-side gate-passage model and UI, backed by shared Signal K services. */
 const $ = (id) => document.getElementById(id);
-const webVersion = "0.5.3";
+const webVersion = "0.5.5";
 
 const selectedColumns = [
   { label: "Local Time (UK)", source: "Local Time", format: "localTimeWithDay" },
@@ -24,6 +24,7 @@ const selectedColumns = [
 
 const locationConstantColumns = [
   { key: "location", label: "Location", type: "text" },
+  { key: "standardPortName", label: "Standard Port", type: "text" },
   { key: "latitude", label: "Latitude", type: "number" },
   { key: "longitude", label: "Longitude", type: "number" },
   { key: "maps", label: "Google Maps", type: "link" },
@@ -40,282 +41,9 @@ const locationConstantColumns = [
   { key: "ebbNeapAfter", label: "Ebb Neap After HW", type: "duration" },
   { key: "ebbSpringSlack", label: "Ebb Spring Slack", type: "duration" },
   { key: "ebbNeapSlack", label: "Ebb Neap Slack", type: "duration" },
-  { key: "actions", label: "Actions", type: "actions" }
 ];
 
-const locationConstants = {
-  "Corryvreckan": {
-    location: "Corryvreckan",
-    latitude: "56.153",
-    longitude: "-5.733",
-    floodSet: "W",
-    ebbSet: "E",
-    springPeakFlow: "8.5",
-    neapPeakFlow: "4.0",
-    source: "Existing app constants; spring rate agrees with Paddle Argyll",
-    floodSpringAfter: "4:10:00",
-    floodNeapAfter: "4:10:00",
-    floodSpringSlack: "0:12:00",
-    floodNeapSlack: "0:40:00",
-    ebbSpringAfter: "-2:10:00",
-    ebbNeapAfter: "-2:10:00",
-    ebbSpringSlack: "0:12:00",
-    ebbNeapSlack: "0:40:00"
-  },
-  "Cuan Sound": {
-    location: "Cuan Sound",
-    latitude: "56.27224",
-    longitude: "-5.637656",
-    floodSet: "W",
-    ebbSet: "E",
-    springPeakFlow: "7.0",
-    neapPeakFlow: "5.0",
-    source: "User almanac extract: flood west +0430 Oban springs, +0515 neaps; ebb east -0145 springs, -0100 neaps; spring rate 7 kn, neap up to 5 kn",
-    floodSpringAfter: "4:30:00",
-    floodNeapAfter: "5:15:00",
-    floodSpringSlack: "0:15:00",
-    floodNeapSlack: "0:40:00",
-    ebbSpringAfter: "-1:45:00",
-    ebbNeapAfter: "-1:00:00",
-    ebbSpringSlack: "0:15:00",
-    ebbNeapSlack: "0:40:00"
-  },
-  "Dorus Mor": {
-    location: "Dorus Mor",
-    latitude: "56.047",
-    longitude: "-5.576",
-    floodSet: "W",
-    ebbSet: "E",
-    springPeakFlow: "8.0",
-    neapPeakFlow: "6.0",
-    source: "User almanac extract: flood east-to-west +0430 Oban springs, +0515 neaps; ebb west-to-east -0145 springs, -0100 neaps; 8 kn springs, 6 kn neaps; spring slack text says 4 hr, needs confirmation",
-    floodSpringAfter: "4:30:00",
-    floodNeapAfter: "5:15:00",
-    floodSpringSlack: "0:15:00",
-    floodNeapSlack: "1:00:00",
-    ebbSpringAfter: "-1:45:00",
-    ebbNeapAfter: "-1:00:00",
-    ebbSpringSlack: "0:15:00",
-    ebbNeapSlack: "1:00:00"
-  },
-  "Sound of Luing": {
-    location: "Sound of Luing",
-    latitude: "56.225",
-    longitude: "-5.609",
-    floodSet: "N",
-    ebbSet: "S",
-    springPeakFlow: "7.0",
-    neapPeakFlow: "5.0",
-    source: "User almanac extract: north-going +0430 Oban springs, +0515 neaps; south-going -0145 springs, -0100 neaps; slack 0:15 springs, 1:00 neaps; 7 kn springs, 5 kn neaps",
-    floodSpringAfter: "4:30:00",
-    floodNeapAfter: "5:15:00",
-    floodSpringSlack: "0:15:00",
-    floodNeapSlack: "1:00:00",
-    ebbSpringAfter: "-1:45:00",
-    ebbNeapAfter: "-1:00:00",
-    ebbSpringSlack: "0:15:00",
-    ebbNeapSlack: "1:00:00"
-  },
-  "Mull of Kintyre": {
-    location: "Mull of Kintyre",
-    latitude: "55.31067",
-    longitude: "-5.80149",
-    floodSet: "",
-    ebbSet: "",
-    springPeakFlow: "",
-    neapPeakFlow: "",
-    source: "User-provided Sail Scotland list; UKCityMap coordinates; no complete timing/slack/neap source yet",
-    floodSpringAfter: "",
-    floodNeapAfter: "",
-    floodSpringSlack: "",
-    floodNeapSlack: "",
-    ebbSpringAfter: "",
-    ebbNeapAfter: "",
-    ebbSpringSlack: "",
-    ebbNeapSlack: ""
-  },
-  "Sound of Islay": {
-    location: "Sound of Islay",
-    latitude: "",
-    longitude: "",
-    floodSet: "N",
-    ebbSet: "S",
-    springPeakFlow: "5.4",
-    neapPeakFlow: "",
-    source: "Tethys/Sound of Islay monitoring reports flood north, ebb south, recorded 5.44 kn; no complete timing/slack/neap source yet",
-    floodSpringAfter: "",
-    floodNeapAfter: "",
-    floodSpringSlack: "",
-    floodNeapSlack: "",
-    ebbSpringAfter: "",
-    ebbNeapAfter: "",
-    ebbSpringSlack: "",
-    ebbNeapSlack: ""
-  },
-  "Firth of Lorn": {
-    location: "Firth of Lorn",
-    latitude: "",
-    longitude: "",
-    floodSet: "NE",
-    ebbSet: "SW",
-    springPeakFlow: "3.0",
-    neapPeakFlow: "1.5",
-    source: "User almanac extract: northeast-going about +0430 Oban; southwest-going about -0155 Oban; 3 kn springs, 1.5 kn neaps; location point, neap timings, and slack durations not yet supplied",
-    floodSpringAfter: "4:30:00",
-    floodNeapAfter: "",
-    floodSpringSlack: "",
-    floodNeapSlack: "",
-    ebbSpringAfter: "-1:55:00",
-    ebbNeapAfter: "",
-    ebbSpringSlack: "",
-    ebbNeapSlack: ""
-  },
-  "Sound of Kerrera": {
-    location: "Sound of Kerrera",
-    latitude: "56.40000",
-    longitude: "-5.51667",
-    floodSet: "N",
-    ebbSet: "S",
-    springPeakFlow: "1.5",
-    neapPeakFlow: "",
-    source: "Paddle Argyll Kayak Trail spring rate/start times; Mindat coordinates",
-    floodSpringAfter: "4:30:00",
-    floodNeapAfter: "",
-    floodSpringSlack: "",
-    floodNeapSlack: "",
-    ebbSpringAfter: "-1:55:00",
-    ebbNeapAfter: "",
-    ebbSpringSlack: "",
-    ebbNeapSlack: ""
-  },
-  "Clachan Sound": {
-    location: "Clachan Sound",
-    latitude: "56.31772",
-    longitude: "-5.58281",
-    floodSet: "N",
-    ebbSet: "S",
-    springPeakFlow: "5.0",
-    neapPeakFlow: "",
-    source: "Paddle Argyll Kayak Trail spring rate/start times; Trove/HES coordinates",
-    floodSpringAfter: "5:55:00",
-    floodNeapAfter: "",
-    floodSpringSlack: "",
-    floodNeapSlack: "",
-    ebbSpringAfter: "-0:25:00",
-    ebbNeapAfter: "",
-    ebbSpringSlack: "",
-    ebbNeapSlack: ""
-  },
-  "Torsa": {
-    location: "Torsa",
-    latitude: "56.25722",
-    longitude: "-5.61667",
-    floodSet: "N",
-    ebbSet: "S",
-    springPeakFlow: "1.0",
-    neapPeakFlow: "",
-    source: "Paddle Argyll Kayak Trail spring rate/start times; Torsa coordinates",
-    floodSpringAfter: "4:15:00",
-    floodNeapAfter: "",
-    floodSpringSlack: "",
-    floodNeapSlack: "",
-    ebbSpringAfter: "-2:00:00",
-    ebbNeapAfter: "",
-    ebbSpringSlack: "",
-    ebbNeapSlack: ""
-  },
-  "Duart Point": {
-    location: "Duart Point",
-    latitude: "56.44167",
-    longitude: "-5.64667",
-    floodSet: "NW",
-    ebbSet: "SE",
-    springPeakFlow: "2.0",
-    neapPeakFlow: "",
-    source: "UKRGB/seakayakphoto timing at SE Sound of Mull/Rubha an Ridire; NLB Duart Point coordinates",
-    floodSpringAfter: "-6:00:00",
-    floodNeapAfter: "",
-    floodSpringSlack: "",
-    floodNeapSlack: "",
-    ebbSpringAfter: "-0:45:00",
-    ebbNeapAfter: "",
-    ebbSpringSlack: "",
-    ebbNeapSlack: ""
-  },
-  "Sound of Mull": {
-    location: "Sound of Mull",
-    latitude: "56.47074",
-    longitude: "-5.70740",
-    floodSet: "NW",
-    ebbSet: "SE",
-    springPeakFlow: "3.0",
-    neapPeakFlow: "1.0",
-    source: "User almanac extract plus web direction check: constant +0015 Oban, heights at Craignure MHWS 4.0 MHWN 3.0 MLWN 1.7 MLWS 0.6; NW-going flood -0545 Oban, SE-going ebb +0025 Oban; 3 kn springs, 1 kn neaps; slack duration not supplied, modeled as zero",
-    floodSpringAfter: "-5:45:00",
-    floodNeapAfter: "-5:45:00",
-    floodSpringSlack: "0:00:00",
-    floodNeapSlack: "0:00:00",
-    ebbSpringAfter: "0:25:00",
-    ebbNeapAfter: "0:25:00",
-    ebbSpringSlack: "0:00:00",
-    ebbNeapSlack: "0:00:00"
-  },
-  "Kyle of Loch Alsh": {
-    location: "Kyle of Loch Alsh",
-    latitude: "57.28387",
-    longitude: "-5.71117",
-    floodSet: "",
-    ebbSet: "",
-    springPeakFlow: "",
-    neapPeakFlow: "",
-    source: "User-provided Sail Scotland list; Geodatos coordinates; no complete tidal stream constants sourced yet",
-    floodSpringAfter: "",
-    floodNeapAfter: "",
-    floodSpringSlack: "",
-    floodNeapSlack: "",
-    ebbSpringAfter: "",
-    ebbNeapAfter: "",
-    ebbSpringSlack: "",
-    ebbNeapSlack: ""
-  },
-  "Kyle Rhea": {
-    location: "Kyle Rhea",
-    latitude: "",
-    longitude: "",
-    floodSet: "",
-    ebbSet: "",
-    springPeakFlow: "",
-    neapPeakFlow: "",
-    source: "Tethys scoping report notes streams can exceed 8 kn at springs and 5 kn on neap flood; no complete timing/slack constants sourced yet",
-    floodSpringAfter: "",
-    floodNeapAfter: "",
-    floodSpringSlack: "",
-    floodNeapSlack: "",
-    ebbSpringAfter: "",
-    ebbNeapAfter: "",
-    ebbSpringSlack: "",
-    ebbNeapSlack: ""
-  },
-  "Ardnamurchan Point": {
-    location: "Ardnamurchan Point",
-    latitude: "56.72556",
-    longitude: "-6.22583",
-    floodSet: "",
-    ebbSet: "",
-    springPeakFlow: "",
-    neapPeakFlow: "",
-    source: "British Place Names coordinates; no complete tidal stream timing/slack/neap source yet",
-    floodSpringAfter: "",
-    floodNeapAfter: "",
-    floodSpringSlack: "",
-    floodNeapSlack: "",
-    ebbSpringAfter: "",
-    ebbNeapAfter: "",
-    ebbSpringSlack: "",
-    ebbNeapSlack: ""
-  }
-};
-
+const locationConstants = {};
 const timeColumns = [
   "Flood Slack Starts",
   "Flood Commences",
@@ -425,10 +153,10 @@ let appSettings = {
   selectedCrewCapability: "competent",
   speed: "5",
   ukhoAccountEmail: "",
-  obanMhws: "4.00",
-  obanMhwn: "2.90",
-  obanMlwn: "1.80",
-  obanMlws: "0.70",
+  standardMhws: "",
+  standardMhwn: "",
+  standardMlwn: "",
+  standardMlws: "",
   fallbackCycleHours: "12.5",
   fallbackEbbHours: "6.2",
   peakEbbOffsetMinutes: "180",
@@ -1879,9 +1607,6 @@ function renderLocationConstantsTable() {
   thead.innerHTML = `<tr>${locationConstantColumns.map((column) => `<th>${column.label}</th>`).join("")}</tr>`;
   tbody.innerHTML = Object.values(locationConstants).map((location) => {
     const cells = locationConstantColumns.map((column) => {
-      if (column.type === "actions") {
-        return `<td><button class="dangerButton" type="button" data-delete-location="${escapeHtml(location.location)}">Delete</button></td>`;
-      }
       if (column.type === "link") {
         const href = googleMapsUrl(location);
         const link = href
@@ -1891,7 +1616,7 @@ function renderLocationConstantsTable() {
       }
       const rawValue = location[column.key];
       const value = column.type === "duration" ? displayDuration(rawValue) : rawValue;
-      return `<td><input value="${escapeHtml(String(value ?? ""))}" data-location="${escapeHtml(location.location)}" data-key="${column.key}"></td>`;
+      return `<td>${escapeHtml(String(value ?? ""))}</td>`;
     }).join("");
     return `<tr>${cells}</tr>`;
   }).join("");
@@ -1928,19 +1653,19 @@ function tideEventsToRangeRows(tideEvents) {
   const rows = [["Time (UT)", "Tide", "Height (m)", "Range (m)", "% Spring"]];
   for (const row of eventRows) {
     const range = Number(row.range);
-    const springPercent = springPercentFromObanRange(range);
+    const springPercent = springPercentFromReferenceRange(range);
     rows.push([row.time, row.type, row.height, Number.isNaN(range) ? "" : range, springPercent]);
   }
   return rows;
 }
 
-function springPercentFromObanRange(range) {
+function springPercentFromReferenceRange(range) {
   const tideRange = Number(range);
   if (Number.isNaN(tideRange)) return "";
-  const mhws = Number(appSettings.obanMhws);
-  const mhwn = Number(appSettings.obanMhwn);
-  const mlwn = Number(appSettings.obanMlwn);
-  const mlws = Number(appSettings.obanMlws);
+  const mhws = Number(appSettings.standardMhws);
+  const mhwn = Number(appSettings.standardMhwn);
+  const mlwn = Number(appSettings.standardMlwn);
+  const mlws = Number(appSettings.standardMlws);
   const springRange = mhws - mlws;
   const neapRange = mhwn - mlwn;
   const spread = springRange - neapRange;
@@ -2017,6 +1742,7 @@ function renderComfortConstantsTable() {
 
 function rebuildTidesFromLocationConstants() {
   syncGateOptions();
+  applySelectedStandardPort();
   const settings = settingsFromControls();
   currentTideRows = tideCalculationRowsFromEvents(currentFetchedTideRows, settings.gate);
   renderReadOnlyTable("gateCalcTable", currentTideRows, editableTideColumns);
@@ -2048,8 +1774,29 @@ function applyLocationConstants(saved) {
       }
     }
     locationConstants[name].location = name;
+    locationConstants[name].standardPort = values.standardPort || null;
   }
   syncGateOptions();
+}
+
+function applySelectedStandardPort() {
+  const standard = locationConstants[$("gate").value]?.standardPort;
+  if (!standard) return;
+  const levels = standard.referenceLevels || {};
+  $("baseTideStationName").value = standard.name || "";
+  $("baseTideStationId").value = standard.stationId || "";
+  $("baseTideTimeStandard").value = "UT";
+  for (const [id, key] of [["standardMhws", "mhws"], ["standardMhwn", "mhwn"], ["standardMlwn", "mlwn"], ["standardMlws", "mlws"]]) {
+    if (Number.isFinite(Number(levels[key]))) $(id).value = Number(levels[key]);
+  }
+  appSettings = {
+    ...appSettings,
+    baseTideStationName: standard.name || "",
+    baseTideStationId: standard.stationId || "",
+    baseTideTimeStandard: "UT",
+    standardMhws: Number(levels.mhws), standardMhwn: Number(levels.mhwn),
+    standardMlwn: Number(levels.mlwn), standardMlws: Number(levels.mlws),
+  };
 }
 
 function syncLocationConstantsFromTable() {
@@ -2102,9 +1849,6 @@ async function loadSettings() {
     const response = await fetch("/plugins/signalk-ajrm-marine-planning/gate/settings");
     if (!response.ok) throw new Error(`server returned ${response.status}`);
     const settings = await response.json();
-    $("baseTideStationName").value = settings.baseTideStationName || "Oban";
-    $("baseTideStationId").value = settings.baseTideStationId || "0372";
-    $("baseTideTimeStandard").value = settings.baseTideTimeStandard || "UT";
     appSettings = { ...appSettings, ...settings };
     $("ukhoAccountEmail").value = settings.ukhoAccountEmail || "";
     if (settings.selectedHeading && [...$("heading").options].some((option) => option.value === settings.selectedHeading)) {
@@ -2114,10 +1858,6 @@ async function loadSettings() {
       $("crewCapability").value = settings.selectedCrewCapability;
     }
     $("speed").value = settings.speed || appSettings.speed;
-    $("obanMhws").value = settings.obanMhws || appSettings.obanMhws;
-    $("obanMhwn").value = settings.obanMhwn || appSettings.obanMhwn;
-    $("obanMlwn").value = settings.obanMlwn || appSettings.obanMlwn;
-    $("obanMlws").value = settings.obanMlws || appSettings.obanMlws;
     for (const id of calculationSettingIds) {
       if ($(id)) $(id).value = settings[id] || appSettings[id];
     }
@@ -2131,13 +1871,6 @@ async function saveSettings() {
   try {
     const ukhoApiKey = $("ukhoApiKey").value.trim();
     const ukhoAccountEmail = $("ukhoAccountEmail").value.trim();
-    const baseTideStationName = $("baseTideStationName").value.trim();
-    const baseTideStationId = $("baseTideStationId").value.trim();
-    const baseTideTimeStandard = $("baseTideTimeStandard").value.trim();
-    const obanMhws = $("obanMhws").value.trim();
-    const obanMhwn = $("obanMhwn").value.trim();
-    const obanMlwn = $("obanMlwn").value.trim();
-    const obanMlws = $("obanMlws").value.trim();
     const selectedGate = $("gate").value;
     const selectedHeading = $("heading").value;
     const selectedCrewCapability = $("crewCapability").value;
@@ -2149,13 +1882,6 @@ async function saveSettings() {
       body: JSON.stringify({
         ukhoApiKey,
         ukhoAccountEmail,
-        baseTideStationName,
-        baseTideStationId,
-        baseTideTimeStandard,
-        obanMhws,
-        obanMhwn,
-        obanMlwn,
-        obanMlws,
         selectedGate,
         selectedHeading,
         selectedCrewCapability,
@@ -2167,18 +1893,11 @@ async function saveSettings() {
     const settings = await response.json();
     $("ukhoApiKey").value = "";
     $("ukhoAccountEmail").value = settings.ukhoAccountEmail || ukhoAccountEmail;
-    $("baseTideStationName").value = settings.baseTideStationName || baseTideStationName;
-    $("baseTideStationId").value = settings.baseTideStationId || baseTideStationId;
-    $("baseTideTimeStandard").value = settings.baseTideTimeStandard || baseTideTimeStandard;
     appSettings = { ...appSettings, ...settings };
     if (settings.selectedGate && locationConstants[settings.selectedGate]) $("gate").value = settings.selectedGate;
     if (settings.selectedHeading) $("heading").value = settings.selectedHeading;
     if (settings.selectedCrewCapability) $("crewCapability").value = settings.selectedCrewCapability;
     $("speed").value = settings.speed || speed;
-    $("obanMhws").value = settings.obanMhws || obanMhws;
-    $("obanMhwn").value = settings.obanMhwn || obanMhwn;
-    $("obanMlwn").value = settings.obanMlwn || obanMlwn;
-    $("obanMlws").value = settings.obanMlws || obanMlws;
     for (const id of calculationSettingIds) {
       if ($(id)) $(id).value = settings[id] || calculationSettings[id];
     }
@@ -2434,31 +2153,6 @@ for (const id of ["speed", "slack", "lwl", "displacement", ...calculationSetting
 $("refreshWeather").addEventListener("click", refreshWeather);
 $("refreshTides").addEventListener("click", refreshTides);
 $("refreshAll").addEventListener("click", refreshAll);
-$("addLocation").addEventListener("click", addLocation);
-$("locationTable").addEventListener("change", (event) => {
-  if (!event.target.matches("input[data-location][data-key]")) return;
-  const locationName = event.target.dataset.location;
-  const key = event.target.dataset.key;
-  if (key === "location") {
-    const newName = renameLocation(locationName, event.target.value);
-    syncGateOptions(newName);
-    renderLocationConstantsTable();
-    rebuildTidesFromLocationConstants();
-    return;
-  }
-  if (!locationConstants[locationName]) return;
-  locationConstants[locationName][key] = event.target.value.trim();
-  if (key === "latitude" || key === "longitude") renderLocationConstantsTable();
-  syncGateOptions($("gate").value);
-  rebuildTidesFromLocationConstants();
-});
-$("locationTable").addEventListener("click", (event) => {
-  const button = event.target.closest("button[data-delete-location]");
-  if (!button) return;
-  deleteLocation(button.dataset.deleteLocation);
-});
-$("loadLocationConstants").addEventListener("click", loadLocationConstants);
-$("saveLocationConstants").addEventListener("click", saveLocationConstants);
 $("saveSettings").addEventListener("click", saveSettings);
 $("hourSelect").addEventListener("change", () => {
   updateHourStepButtons();

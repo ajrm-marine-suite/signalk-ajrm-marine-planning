@@ -1,5 +1,5 @@
 /** Browser-side anchor load, rode, scope, clearance and catenary model. */
-const webVersion = "0.5.3";
+const webVersion = "0.5.5";
 const halfCycleMinutes = 12 * 60 + 25;
 
 const defaults = {
@@ -45,15 +45,15 @@ let selectedTideViewKey = "now";
 let saveSettingsTimer = null;
 let serverState = {
   tide: {
-    source: "oban",
+    source: "referencePort",
     selectedPortId: "",
-    obanReferenceLevels: {
+    standardReferenceLevels: {
       mhws: 4.0,
       mhwn: 2.9,
       mlwn: 1.8,
       mlws: 0.7
     },
-    oban: {
+    referencePort: {
       hwTime: "15:00",
       lwTime: "09:00",
       hwHeight: 4,
@@ -62,8 +62,8 @@ let serverState = {
   },
   secondaryPorts: [],
   tideData: {
-    stationName: "Oban",
-    stationId: "0372",
+    stationName: "",
+    stationId: "",
     timeStandard: "UT",
     displayTimeMode: "local",
     ukhoAccountEmail: "",
@@ -150,18 +150,18 @@ function todayIsoDateForMode() {
   return `${parts.year}-${parts.month}-${parts.day}`;
 }
 
-function obanDate() {
-  return serverState.tide.oban.date || todayIsoDateForMode();
+function referencePortDate() {
+  return serverState.tide.referencePort.date || todayIsoDateForMode();
 }
 
-function timeFromUtcForDisplay(utTime, date = obanDate()) {
+function timeFromUtcForDisplay(utTime, date = referencePortDate()) {
   if (displayTimeMode() !== "local") return utTime || "00:00";
   const parsed = new Date(`${date}T${utTime || "00:00"}:00Z`);
   if (Number.isNaN(parsed.getTime())) return utTime || "00:00";
   return `${String(parsed.getHours()).padStart(2, "0")}:${String(parsed.getMinutes()).padStart(2, "0")}`;
 }
 
-function timeFromDisplayToUtc(displayTime, date = obanDate()) {
+function timeFromDisplayToUtc(displayTime, date = referencePortDate()) {
   if (displayTimeMode() !== "local") return displayTime || "00:00";
   const [hours, minutes] = String(displayTime || "00:00").split(":").map(Number);
   const [year, month, day] = String(date || todayIsoDateForMode()).split("-").map(Number);
@@ -338,13 +338,13 @@ function mergeServerState(state = {}) {
     tide: {
       ...serverState.tide,
       ...(state.tide || {}),
-      obanReferenceLevels: {
-        ...serverState.tide.obanReferenceLevels,
-        ...(state.tide?.obanReferenceLevels || {})
+      standardReferenceLevels: {
+        ...serverState.tide.standardReferenceLevels,
+        ...(state.tide?.standardReferenceLevels || {})
       },
-      oban: {
-        ...serverState.tide.oban,
-        ...(state.tide?.oban || {})
+      referencePort: {
+        ...serverState.tide.referencePort,
+        ...(state.tide?.referencePort || {})
       }
     },
     secondaryPorts: Array.isArray(state.secondaryPorts) ? state.secondaryPorts : [],
@@ -380,8 +380,8 @@ function saveServerStateSoon() {
   }, 350);
 }
 
-function obanTideFromFields() {
-  const date = obanDate();
+function referencePortTideFromFields() {
+  const date = referencePortDate();
   return {
     date,
     hwTime: timeFromDisplayToUtc(document.getElementById("hwTime").value || "00:00", date),
@@ -433,7 +433,7 @@ function portOffsets(port, type) {
 
 function portHeightDiffs(port) {
   if (port.heightDiffs) return port.heightDiffs;
-  const reference = serverState.tide.obanReferenceLevels;
+  const reference = serverState.tide.standardReferenceLevels;
   return {
     mhws: Number(port.mhws || 0) - Number(reference.mhws || 0),
     mhwn: Number(port.mhwn || 0) - Number(reference.mhwn || 0),
@@ -443,11 +443,11 @@ function portHeightDiffs(port) {
 }
 
 function portStandardPort(port) {
-  return port.standardPort || "Oban";
+  return port.standardPort || "Selected standard port";
 }
 
 function portReferenceLevels(port) {
-  return port.standardReferenceLevels || serverState.tide.obanReferenceLevels;
+  return port.standardReferenceLevels || serverState.tide.standardReferenceLevels;
 }
 
 function interpolateTimeOffset(offsets, minutes) {
@@ -472,29 +472,29 @@ function interpolateTimeOffset(offsets, minutes) {
   return before.value + ((after.value - before.value) * (normalized - before.minute)) / span;
 }
 
-function secondaryTideValues(port = selectedSecondaryPort(), oban = serverState.tide.oban) {
-  if (!port) return { ...oban };
-  const reference = serverState.tide.obanReferenceLevels;
-  const hwFactor = springFactor(Number(oban.hwHeight || 0), Number(reference.mhwn || 0), Number(reference.mhws || 0));
-  const lwFactor = lowWaterSpringFactor(Number(oban.lwHeight || 0), Number(reference.mlwn || 0), Number(reference.mlws || 0));
-  const hwTimeOffset = interpolateTimeOffset(portOffsets(port, "hw"), timeToMinutes(oban.hwTime));
-  const lwTimeOffset = interpolateTimeOffset(portOffsets(port, "lw"), timeToMinutes(oban.lwTime));
+function secondaryTideValues(port = selectedSecondaryPort(), referencePort = serverState.tide.referencePort) {
+  if (!port) return { ...referencePort };
+  const reference = portReferenceLevels(port);
+  const hwFactor = springFactor(Number(referencePort.hwHeight || 0), Number(reference.mhwn || 0), Number(reference.mhws || 0));
+  const lwFactor = lowWaterSpringFactor(Number(referencePort.lwHeight || 0), Number(reference.mlwn || 0), Number(reference.mlws || 0));
+  const hwTimeOffset = interpolateTimeOffset(portOffsets(port, "hw"), timeToMinutes(referencePort.hwTime));
+  const lwTimeOffset = interpolateTimeOffset(portOffsets(port, "lw"), timeToMinutes(referencePort.lwTime));
   const heightDiffs = portHeightDiffs(port);
   const hwHeightDiff = interpolateOffset(heightDiffs.mhwn, heightDiffs.mhws, hwFactor);
   const lwHeightDiff = interpolateOffset(heightDiffs.mlwn, heightDiffs.mlws, lwFactor);
-  const date = oban.date || obanDate();
-  const hwTimeUtc = minutesToTime(timeToMinutes(oban.hwTime) + hwTimeOffset);
-  const lwTimeUtc = minutesToTime(timeToMinutes(oban.lwTime) + lwTimeOffset);
+  const date = referencePort.date || referencePortDate();
+  const hwTimeUtc = minutesToTime(timeToMinutes(referencePort.hwTime) + hwTimeOffset);
+  const lwTimeUtc = minutesToTime(timeToMinutes(referencePort.lwTime) + lwTimeOffset);
   return {
     date,
     hwTime: timeFromUtcForDisplay(hwTimeUtc, date),
     lwTime: timeFromUtcForDisplay(lwTimeUtc, date),
-    hwHeight: round(Number(oban.hwHeight || 0) + hwHeightDiff, 1),
-    lwHeight: round(Number(oban.lwHeight || 0) + lwHeightDiff, 1)
+    hwHeight: round(Number(referencePort.hwHeight || 0) + hwHeightDiff, 1),
+    lwHeight: round(Number(referencePort.lwHeight || 0) + lwHeightDiff, 1)
   };
 }
 
-function downloadedObanCycle(now = new Date()) {
+function downloadedReferencePortCycle(now = new Date()) {
   const nowMs = now.getTime();
   const events = sortedTideEvents()
     .filter((event) => Number.isFinite(eventTimestamp(event)) && Number.isFinite(eventHeight(event)));
@@ -523,9 +523,9 @@ function downloadedObanCycle(now = new Date()) {
   return pairs[nearestPairIndex];
 }
 
-function obanTideValuesForNow(now = new Date()) {
-  const cycle = downloadedObanCycle(now);
-  if (!cycle) return { ...serverState.tide.oban, downloaded: false };
+function referencePortTideValuesForNow(now = new Date()) {
+  const cycle = downloadedReferencePortCycle(now);
+  if (!cycle) return { ...serverState.tide.referencePort, downloaded: false };
   return {
     date: eventDate(cycle.hw),
     hwTime: eventTime(cycle.hw),
@@ -538,19 +538,19 @@ function obanTideValuesForNow(now = new Date()) {
 }
 
 function activeTideValues(now = new Date()) {
-  const oban = obanTideValuesForNow(now);
-  if (serverState.tide.source === "secondary") return secondaryTideValues(selectedSecondaryPort(), oban);
-  const date = oban.date || obanDate();
+  const referencePort = referencePortTideValuesForNow(now);
+  if (serverState.tide.source === "secondary") return secondaryTideValues(selectedSecondaryPort(), referencePort);
+  const date = referencePort.date || referencePortDate();
   return {
-    ...oban,
+    ...referencePort,
     date,
-    hwTime: timeFromUtcForDisplay(oban.hwTime, date),
-    lwTime: timeFromUtcForDisplay(oban.lwTime, date)
+    hwTime: timeFromUtcForDisplay(referencePort.hwTime, date),
+    lwTime: timeFromUtcForDisplay(referencePort.lwTime, date)
   };
 }
 
 function springPercentFromRange(range) {
-  const reference = serverState.tide.obanReferenceLevels;
+  const reference = selectedSecondaryPort() ? portReferenceLevels(selectedSecondaryPort()) : serverState.tide.standardReferenceLevels;
   const springRange = Number(reference.mhws || 0) - Number(reference.mlws || 0);
   const neapRange = Number(reference.mhwn || 0) - Number(reference.mlwn || 0);
   const spread = springRange - neapRange;
@@ -559,8 +559,8 @@ function springPercentFromRange(range) {
 }
 
 function springPercentageForNow() {
-  const oban = obanTideValuesForNow();
-  const range = oban.cycle?.range ?? Math.abs(Number(oban.hwHeight || 0) - Number(oban.lwHeight || 0));
+  const referencePort = referencePortTideValuesForNow();
+  const range = referencePort.cycle?.range ?? Math.abs(Number(referencePort.hwHeight || 0) - Number(referencePort.lwHeight || 0));
   return springPercentFromRange(range);
 }
 
@@ -995,13 +995,13 @@ function clearIdealRodeRecommendation() {
 }
 
 function applyServerStateToTideFields() {
-  const oban = obanTideValuesForNow();
-  const reference = serverState.tide.obanReferenceLevels;
-  const date = oban.date || obanDate();
-  document.getElementById("hwTime").value = timeFromUtcForDisplay(oban.hwTime || "15:00", date);
-  document.getElementById("lwTime").value = timeFromUtcForDisplay(oban.lwTime || "09:00", date);
-  document.getElementById("hwHeight").value = oban.hwHeight ?? 4;
-  document.getElementById("lwHeight").value = oban.lwHeight ?? 1;
+  const referencePort = referencePortTideValuesForNow();
+  const reference = serverState.tide.standardReferenceLevels;
+  const date = referencePort.date || referencePortDate();
+  document.getElementById("hwTime").value = timeFromUtcForDisplay(referencePort.hwTime || "15:00", date);
+  document.getElementById("lwTime").value = timeFromUtcForDisplay(referencePort.lwTime || "09:00", date);
+  document.getElementById("hwHeight").value = referencePort.hwHeight ?? 4;
+  document.getElementById("lwHeight").value = referencePort.lwHeight ?? 1;
   document.getElementById("hwTimeUnit").textContent = timeBasisLabel();
   document.getElementById("lwTimeUnit").textContent = timeBasisLabel();
   document.getElementById("secondaryPortSelect").value = serverState.tide.selectedPortId || "";
@@ -1014,18 +1014,18 @@ function applyServerStateToTideFields() {
 function renderSecondaryPortOptions() {
   const select = document.getElementById("secondaryPortSelect");
   select.innerHTML = [
-    `<option value="">No secondary port selected</option>`,
+    `<option value="">No tide location selected</option>`,
     ...serverState.secondaryPorts
       .slice()
       .sort((a, b) => a.name.localeCompare(b.name))
-      .map((port) => `<option value="${escapeHtml(port.id)}">${escapeHtml(port.name)}</option>`)
+      .map((port) => `<option value="${escapeHtml(port.id)}">${escapeHtml(port.name)} (${escapeHtml(port.kind || "secondary")})</option>`)
   ].join("");
   select.value = serverState.tide.selectedPortId || "";
 }
 
 function renderSecondaryTidePreview() {
   const port = selectedSecondaryPort();
-  if (!port && serverState.tide.source === "secondary") serverState.tide.source = "oban";
+  if (!port && serverState.tide.source === "secondary") serverState.tide.source = "referencePort";
   const showSecondary = Boolean(port && serverState.tide.source === "secondary");
   const secondary = secondaryTideValues(port);
   document.getElementById("secondaryHwTime").textContent = showSecondary ? secondary.hwTime : "-";
@@ -1076,7 +1076,7 @@ function pairedTideRange(events, index) {
 
 function applyTideDataFields() {
   const tideData = serverState.tideData;
-  document.getElementById("tideDataStationName").value = tideData.stationName || "Oban";
+  document.getElementById("tideDataStationName").value = tideData.stationName || "";
   document.getElementById("tideDataStationId").value = tideData.stationId || "0372";
   document.getElementById("tideDataTimeStandard").value = tideData.timeStandard || "UT";
   document.getElementById("tideDataDisplayMode").value = displayTimeMode();
@@ -1086,12 +1086,12 @@ function applyTideDataFields() {
 function renderTideDataManager() {
   const tideData = serverState.tideData;
   const events = sortedTideEvents();
-  if (document.activeElement?.id !== "tideDataStationName") document.getElementById("tideDataStationName").value = tideData.stationName || "Oban";
+  if (document.activeElement?.id !== "tideDataStationName") document.getElementById("tideDataStationName").value = tideData.stationName || "";
   if (document.activeElement?.id !== "tideDataStationId") document.getElementById("tideDataStationId").value = tideData.stationId || "0372";
   if (document.activeElement?.id !== "tideDataTimeStandard") document.getElementById("tideDataTimeStandard").value = tideData.timeStandard || "UT";
   if (document.activeElement?.id !== "tideDataDisplayMode") document.getElementById("tideDataDisplayMode").value = displayTimeMode();
   if (document.activeElement?.id !== "tideDataAccountEmail") document.getElementById("tideDataAccountEmail").value = tideData.ukhoAccountEmail || "";
-  document.getElementById("tideDataStationLabel").textContent = `${tideData.stationName || "Oban"} ${tideData.stationId || "0372"} (${timeBasisLabel()})`;
+  document.getElementById("tideDataStationLabel").textContent = `${tideData.stationName || ""} ${tideData.stationId || "0372"} (${timeBasisLabel()})`;
   document.getElementById("tideDataKeyLabel").textContent = tideData.ukhoApiKeySet ? "Set" : "Not set";
   document.getElementById("tideDataFetchedLabel").textContent = fmtDateTime(tideData.cache?.fetchedAt);
   document.getElementById("tideDataCountLabel").textContent = String(events.length);
@@ -1126,7 +1126,7 @@ function renderTideDataManager() {
 }
 
 function persistTideStateFromFields() {
-  serverState.tide.oban = obanTideFromFields();
+  serverState.tide.referencePort = referencePortTideFromFields();
   saveServerStateSoon();
 }
 
@@ -1154,10 +1154,10 @@ function tideHeightBetween(before, after, minute) {
   return before.height - (before.height - after.height) * fraction;
 }
 
-function secondaryEventFromObanEvent(port, event) {
+function secondaryEventFromReferencePortEvent(port, event) {
   const type = eventTypeShort(event);
   const height = eventHeight(event);
-  const reference = serverState.tide.obanReferenceLevels;
+  const reference = portReferenceLevels(port);
   const heightDiffs = portHeightDiffs(port);
   if (type === "HW") {
     const factor = springFactor(height, Number(reference.mhwn || 0), Number(reference.mhws || 0));
@@ -1182,7 +1182,7 @@ function activeTideTimeline(date = new Date()) {
   const dayStart = displayDayStart(date);
   const timeline = events
     .map((event) => {
-      const corrected = port ? secondaryEventFromObanEvent(port, event) : {
+      const corrected = port ? secondaryEventFromReferencePortEvent(port, event) : {
         type: eventTypeShort(event),
         timestamp: eventTimestamp(event),
         height: eventHeight(event)
@@ -1362,7 +1362,7 @@ function updateTideSummary() {
   const spring = springPercentageForNow();
   const tideSourceLabel = serverState.tide.source === "secondary" && selectedSecondaryPort()
     ? selectedSecondaryPort().name
-    : "Oban";
+    : "entered reference-port";
   document.getElementById("tideHeight").value = round(tide.height, 1);
   document.getElementById("currentTimeLabel").textContent = formatClock(tide.now);
   document.getElementById("currentRiseLabel").textContent = `${fmt(tide.height, 1, " m")} ${tide.phase.toLowerCase()}`;
@@ -1660,7 +1660,7 @@ function renderTideCurve() {
   const tide = activeTideValues();
   const tideSourceLabel = serverState.tide.source === "secondary" && selectedSecondaryPort()
     ? selectedSecondaryPort().name
-    : "Oban";
+    : "entered reference-port";
   const now = new Date();
   const timeline = activeTideTimeline(now);
   const nowMinutes = nowMinutesForDisplayMode(now);
@@ -1847,7 +1847,7 @@ document.querySelectorAll(".tideSourceButton").forEach((button) => {
 
 document.getElementById("secondaryPortSelect").addEventListener("change", (event) => {
   serverState.tide.selectedPortId = event.target.value;
-  if (!selectedSecondaryPort() && serverState.tide.source === "secondary") serverState.tide.source = "oban";
+  if (!selectedSecondaryPort() && serverState.tide.source === "secondary") serverState.tide.source = "referencePort";
   idealRode = null;
   clearIdealRodeRecommendation();
   saveServerStateSoon();
@@ -1908,10 +1908,8 @@ document.getElementById("refreshTideData").addEventListener("click", async () =>
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        stationName: document.getElementById("tideDataStationName").value.trim(),
-        stationId: document.getElementById("tideDataStationId").value.trim(),
-        timeStandard: document.getElementById("tideDataTimeStandard").value.trim(),
         displayTimeMode: document.getElementById("tideDataDisplayMode").value,
+        selectedPortId: serverState.tide.selectedPortId,
         force: true
       })
     });

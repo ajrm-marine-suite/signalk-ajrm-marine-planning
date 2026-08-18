@@ -1,10 +1,11 @@
 # AJRM Marine Planning
 
-Version `0.5.4` removes duplicate secondary-port maintenance. Location Editor
-now owns the correction records and Anchor Force consumes its Oban-linked
-secondary ports read-only. The migrated Planning data remains available under
-stable identifiers, while corrections for other standard ports stay in
-Location Editor until Planning can request their standard-port predictions.
+Version `0.5.5` completes shared tidal-data ownership. Gate Passage now reads
+all gate constants and each gate's standard-port relationship from Location
+Editor; its former editor and private constants file are removed. Anchor Force
+offers one read-only location list containing both standard and secondary
+ports, requests predictions for the selected standard station, and applies a
+secondary correction only where the selected record requires one.
 
 Version `0.5.3` requires explicit timezone information on tide events received
 from the shared Tide Resolver and preserves their normalized UTC instants for
@@ -13,7 +14,7 @@ and Anchor Force retains its selectable UT/local display mode.
 
 AJRM Marine Planning is one Signal K plugin with two related views:
 
-- **Gate Passage** combines a forecast, UKHO tidal events and editable local
+- **Gate Passage** combines a forecast, UKHO tidal events and shared read-only
   tidal-stream constants to compare candidate transit hours.
 - **Anchor Force** checks depth, clearance, scope, wind/current load, catenary,
   rode composition and anchor holding assumptions.
@@ -26,8 +27,9 @@ caching tier in Location Editor. Discovery-tier UKHO data is not persisted.
 
 Open **AJRM Marine Planning** from the Signal K webapps list and switch between
 the two planners using the buttons in the header. Calculation constants and
-manual overrides persist in Planning's Signal K data directory. Secondary-port
-corrections are edited in Location Editor, not in Planning.
+manual overrides persist in Planning's Signal K data directory. Standard ports,
+secondary-port corrections and tidal-gate constants are edited in Location
+Editor, not in Planning.
 
 The read-only `app.ajrmMarinePlanningDiagnostics` contract lets AJRM Marine
 Snapshot retain planner readiness, Gate Passage settings/constants, Anchor
@@ -45,9 +47,7 @@ low-water clearance. The skipper remains responsible for every decision.
 
 ## Migration
 
-The first integrated release carries forward the proven calculator models and
-their editable gate constants. Secondary-port constants were subsequently
-migrated to versioned Location Editor records. Planning intentionally removes
-its standalone provider caches and stored UKHO keys. Do not retire the standalone
-apps until both integrated views have been checked aboard or against known
-examples.
+The first integrated release carried forward the proven calculator models.
+Secondary-port and tidal-gate constants are now migrated to versioned Location
+Editor records. Planning intentionally removes its standalone provider caches,
+stored UKHO keys and writable location-constant store.

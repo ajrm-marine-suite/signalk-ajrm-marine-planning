@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Anchor Force Planner</title>
-    <link rel="stylesheet" href="styles.css?v=0.5.4">
+    <link rel="stylesheet" href="styles.css?v=0.5.5">
   </head>
   <body>
     <header class="topbar">
@@ -21,8 +21,8 @@
 
       <nav class="tabs" aria-label="Planner tabs">
         <button class="tabButton active" type="button" data-tab="planner" title="Main anchoring planner: enter conditions, choose a tide view, and see rode, clearance, catenary, and anchor holding checks.">Planner</button>
-        <button class="tabButton" type="button" data-tab="tide" title="Manual tide entry and secondary-port selection. Shows current tide rise, spring percentage, keel clearance, and tide curve.">Tide</button>
-        <button class="tabButton" type="button" data-tab="tideData" title="Fetch and inspect downloaded Oban tide events from the configured tide API.">Tide Data</button>
+        <button class="tabButton" type="button" data-tab="tide" title="Manual tide entry and tide-location selection. Shows current tide rise, spring percentage, keel clearance, and tide curve.">Tide</button>
+        <button class="tabButton" type="button" data-tab="tideData" title="Fetch and inspect downloaded tide events for the selected standard port from the configured tide API.">Tide Data</button>
         <button class="tabButton" type="button" data-tab="settings" title="Boat constants, ground tackle, echo-sounder mode, API settings, and save/reset controls.">Settings</button>
         <button class="tabButton" type="button" data-tab="force" title="Wind force lookup table and curve using the current boat windage settings.">Wind Force</button>
         <button class="tabButton" type="button" data-tab="formulas" title="Formula notes for the calculations used by the app.">Formulas</button>
@@ -124,22 +124,22 @@
         <div class="panelHeader">
           <div>
             <h2>Tide</h2>
-            <p>Enter Oban tide data, then optionally apply a secondary-port correction maintained in AJRM Marine Location Editor.</p>
+            <p>Enter reference-port tide data, then optionally apply a tide-location correction maintained in AJRM Marine Location Editor.</p>
           </div>
         </div>
         <section class="inputPanel settingsPanel" aria-label="Tide settings">
           <div class="depthSourcePanel tideSourcePanel" aria-label="Tide source">
             <div class="depthSourceButtons" role="group" aria-label="Tide source used in calculations">
-              <button class="depthSourceButton tideSourceButton active" type="button" data-tide-source="oban" title="Use the entered Oban HW/LW times and heights in all tide calculations.">Use Oban</button>
-              <button class="depthSourceButton tideSourceButton" type="button" data-tide-source="secondary" title="Use the selected secondary port's calculated HW/LW times and heights in all tide calculations.">Use secondary port</button>
+              <button class="depthSourceButton tideSourceButton active" type="button" data-tide-source="referencePort" title="Use the entered reference-port HW/LW times and heights in all tide calculations.">Use entered values</button>
+              <button class="depthSourceButton tideSourceButton" type="button" data-tide-source="secondary" title="Use the selected tide location's calculated HW/LW times and heights in all tide calculations.">Use tide location</button>
             </div>
-            <label title="Saved secondary port correction to apply to the Oban standard-port values.">Secondary port
+            <label title="Saved tide-location correction to apply to the selected standard-port values.">Tide location
               <select id="secondaryPortSelect">
-                <option value="">No secondary port selected</option>
+                <option value="">No tide location selected</option>
               </select>
             </label>
           </div>
-          <h3>Oban standard port</h3>
+          <h3>Reference port</h3>
           <div class="inputGrid settingsGrid">
             <label title="High-water time nearest the anchoring period, shown in the Tide Data display-time setting. UKHO downloaded times are stored internally as UT.">HW time
               <span class="inputWithUnit"><input id="hwTime" type="time" value="15:00"><span id="hwTimeUnit">UT</span></span>
@@ -154,25 +154,25 @@
               <span class="inputWithUnit"><input id="lwHeight" type="number" value="1" min="-2" max="15" step="0.1"><span>m</span></span>
             </label>
           </div>
-          <section class="secondaryPreview" aria-label="Calculated secondary port tide">
+          <section class="secondaryPreview" aria-label="Calculated tide location tide">
             <div class="panelHeader">
               <div>
-                <h3>Calculated secondary port</h3>
-                <p>Live calculation from the selected port's saved corrections.</p>
+                <h3>Calculated tide location</h3>
+                <p>Live calculation from the selected location's saved corrections.</p>
               </div>
             </div>
             <section class="tideSummary compactSummary" aria-live="polite">
-              <div title="Calculated high-water time after applying the selected secondary port's HW correction to Oban."><span>HW time</span><strong id="secondaryHwTime">-</strong></div>
-              <div title="Calculated low-water time after applying the selected secondary port's LW correction to Oban."><span>LW time</span><strong id="secondaryLwTime">-</strong></div>
-              <div title="Calculated secondary-port high-water height after interpolating height differences."><span>HW height</span><strong id="secondaryHwHeight">-</strong></div>
-              <div title="Calculated secondary-port low-water height after interpolating height differences."><span>LW height</span><strong id="secondaryLwHeight">-</strong></div>
+              <div title="Calculated high-water time after applying the selected tide location's HW correction to its reference port."><span>HW time</span><strong id="secondaryHwTime">-</strong></div>
+              <div title="Calculated low-water time after applying the selected tide location's LW correction to its reference port."><span>LW time</span><strong id="secondaryLwTime">-</strong></div>
+              <div title="Calculated tide-location high-water height after interpolating height differences."><span>HW height</span><strong id="secondaryHwHeight">-</strong></div>
+              <div title="Calculated tide-location low-water height after interpolating height differences."><span>LW height</span><strong id="secondaryLwHeight">-</strong></div>
             </section>
           </section>
         </section>
         <section id="tideSummary" class="tideSummary" aria-live="polite">
           <div title="The actual clock time used for the Tide tab's present-time calculation."><span>Time now</span><strong id="currentTimeLabel">-</strong></div>
           <div title="Estimated current tide height above chart datum from downloaded events or entered HW/LW values."><span>Tide rise now</span><strong id="currentRiseLabel">-</strong></div>
-          <div title="How spring-like the current tide range is, based on Oban reference levels. Values can be below 0% or above 100%."><span>% Spring</span><strong id="springPercentLabel">-</strong></div>
+          <div title="How spring-like the current tide range is, based on the selected reference-port levels. Values can be below 0% or above 100%."><span>% Spring</span><strong id="springPercentLabel">-</strong></div>
           <div title="Estimated depth beneath keel right now using the selected depth source."><span>Keel clearance now</span><strong id="currentDepthLabel">-</strong></div>
           <div title="Predicted depth beneath keel at the relevant low water for the Tide tab. This is the grounding check on this tab."><span>Low-water clearance</span><strong id="lowWaterClearanceLabel">-</strong></div>
         </section>
@@ -186,9 +186,9 @@
         <div class="panelHeader">
           <div>
             <h2>Tide Data</h2>
-            <p>Download and manage Oban tide events from the ADMIRALTY UK Tidal API.</p>
+            <p>Download and manage tide events for the selected standard port from the ADMIRALTY UK Tidal API.</p>
           </div>
-          <button id="refreshTideData" type="button" title="Fetch fresh Oban tide data, or use today's server cache if it is still fresh.">Refresh tides</button>
+          <button id="refreshTideData" type="button" title="Fetch fresh reference-port tide data, or use today's server cache if it is still fresh.">Refresh tides</button>
         </div>
         <section class="tideSummary compactSummary" aria-label="Tide data status">
           <div title="Configured standard-port tide station used for downloads."><span>Station</span><strong id="tideDataStationLabel">-</strong></div>
@@ -197,7 +197,7 @@
           <div title="Number of downloaded high-water and low-water events currently available."><span>Events</span><strong id="tideDataCountLabel">-</strong></div>
           <div title="Whether the displayed tide data is fresh, cached, stale, or unavailable."><span>Status</span><strong id="tideDataStatusLabel">-</strong></div>
         </section>
-        <section class="tableWrap secondaryTable" aria-label="Fetched Oban tide events">
+        <section class="tableWrap secondaryTable" aria-label="Fetched tide events">
           <table id="tideDataTable">
             <thead>
               <tr>
@@ -285,13 +285,13 @@
           <h3>System settings</h3>
           <div class="inputGrid settingsGrid">
             <label title="Standard port name used for downloaded tide events.">Station name
-              <input id="tideDataStationName" type="text" value="Oban">
+              <input id="tideDataStationName" type="text" value="" disabled>
             </label>
             <label title="The prediction station is selected by AJRM Marine Location Editor.">UKHO station ID (Location Editor)
-              <input id="tideDataStationId" type="text" value="0372" inputmode="numeric" disabled>
+              <input id="tideDataStationId" type="text" value="" inputmode="numeric" disabled>
             </label>
             <label title="Time standard reported by UKHO. The app treats downloaded tide events as UT.">Time standard
-              <input id="tideDataTimeStandard" type="text" value="UT">
+              <input id="tideDataTimeStandard" type="text" value="UT" disabled>
             </label>
             <label title="Choose whether tide-event times, Tide tab HW/LW inputs, and the tide graph are displayed as UT or this browser's local time. Stored UKHO data remains UT.">Display times
               <select id="tideDataDisplayMode">
@@ -387,6 +387,6 @@
       </section>
     </main>
 
-    <script src="app.js?v=0.5.4"></script>
+    <script src="app.js?v=0.5.5"></script>
   </body>
 </html>

@@ -1,14 +1,14 @@
 {
   "tide": {
-    "source": "secondary",
-    "selectedPortId": "tobermory",
-    "obanReferenceLevels": {
+    "source": "referencePort",
+    "selectedPortId": "",
+    "standardReferenceLevels": {
       "mhws": 4,
       "mhwn": 2.9,
       "mlwn": 1.8,
       "mlws": 0.7
     },
-    "oban": {
+    "referencePort": {
       "hwTime": "08:52",
       "lwTime": "03:01",
       "hwHeight": 3.2,
@@ -17,8 +17,8 @@
   },
   "secondaryPorts": [],
   "tideData": {
-    "stationName": "Oban",
-    "stationId": "0372",
+    "stationName": "",
+    "stationId": "",
     "timeStandard": "UT",
     "displayTimeMode": "local",
     "ukhoAccountEmail": "",

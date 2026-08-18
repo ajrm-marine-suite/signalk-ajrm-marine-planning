@@ -2,7 +2,7 @@
 
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { secondaryPortsFromLocations } = require("../plugin/secondary-ports.cjs");
+const { secondaryPortsFromLocations, tideLocationsFromLocations } = require("../plugin/secondary-ports.cjs");
 
 const oban = { id: "oban", name: "Oban", types: ["tidalStandardPort"] };
 const tobermory = {
@@ -36,4 +36,12 @@ test("excludes corrections belonging to another standard port", () => {
 	portsmouth.properties.tide.secondaryPortCorrections.standardPortName = "Portsmouth";
 	delete portsmouth.properties.tide.parentLocationRef;
 	assert.deepEqual(secondaryPortsFromLocations([oban, portsmouth], { standardPortName: "Oban" }), []);
+});
+
+test("projects selectable standard and secondary tide locations", () => {
+	const standard = { ...oban, properties: { tide: { providerId: "ukhoTidalEvents", stationId: "0372", stationName: "Oban", referenceLevels: { mhws: 4, mhwn: 2.9, mlwn: 1.8, mlws: 0.7 } } } };
+	const result = tideLocationsFromLocations([standard, tobermory]);
+	assert.deepEqual(result.map((entry) => [entry.kind, entry.name]), [["standard", "Oban"], ["secondary", "Tobermory"]]);
+	assert.equal(result[0].standardPortLocationId, "oban");
+	assert.equal(result[1].standardPortLocationId, "oban");
 });

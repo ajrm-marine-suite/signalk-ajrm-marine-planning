@@ -233,25 +233,25 @@
             <input id="ukhoAccountEmail" type="email" autocomplete="email" placeholder="Configure in Location Editor" disabled>
           </label>
           <label><span class="labelText">Base tide station<span class="helpIcon" tabindex="0" aria-label="Reference tide station used for high and low water heights and times. The tidal gate constants then offset from this station to local gate stream timings." title="Reference tide station used for high and low water heights and times. The tidal gate constants then offset from this station to local gate stream timings.">?</span></span>
-            <input id="baseTideStationName" type="text" value="Oban" disabled>
+            <input id="baseTideStationName" type="text" value="" disabled>
           </label>
-          <label><span class="labelText">UKHO station ID<span class="helpIcon" tabindex="0" aria-label="UKHO station number for the base tide station. Oban is currently 0372. Changing this affects future tide downloads and the cached tide file key." title="UKHO station number for the base tide station. Oban is currently 0372. Changing this affects future tide downloads and the cached tide file key.">?</span></span>
-            <input id="baseTideStationId" type="text" value="0372" inputmode="numeric" disabled>
+          <label><span class="labelText">UKHO station ID<span class="helpIcon" tabindex="0" aria-label="UKHO station number for the base tide station. supplied by the selected gate standard-port record in Location Editor." title="UKHO station number for the base tide station. supplied by the selected gate standard-port record in Location Editor.">?</span></span>
+            <input id="baseTideStationId" type="text" value="" inputmode="numeric" disabled>
           </label>
           <label><span class="labelText">Tide time standard<span class="helpIcon" tabindex="0" aria-label="Time zone standard reported by the tide source. UKHO tidal event times here are treated as UT, and screen headings say UT or BST where relevant." title="Time zone standard reported by the tide source. UKHO tidal event times here are treated as UT, and screen headings say UT or BST where relevant.">?</span></span>
             <input id="baseTideTimeStandard" type="text" value="UT" readonly>
           </label>
-          <label><span class="labelText">Oban MHWS (m)<span class="helpIcon" tabindex="0" aria-label="Mean High Water Springs at the base station. Used with MLWS to estimate the spring range. Because this is a mean, real tides can exceed it and % Spring is deliberately not capped at 100%." title="Mean High Water Springs at the base station. Used with MLWS to estimate the spring range. Because this is a mean, real tides can exceed it and % Spring is deliberately not capped at 100%.">?</span></span>
-            <input id="obanMhws" type="number" value="4.00" step="0.01">
+          <label><span class="labelText">Reference-port MHWS (m)<span class="helpIcon" tabindex="0" aria-label="Mean High Water Springs at the base station. Used with MLWS to estimate the spring range. Because this is a mean, real tides can exceed it and % Spring is deliberately not capped at 100%." title="Mean High Water Springs at the base station. Used with MLWS to estimate the spring range. Because this is a mean, real tides can exceed it and % Spring is deliberately not capped at 100%.">?</span></span>
+            <input id="standardMhws" type="number" value="" step="0.01" readonly>
           </label>
-          <label><span class="labelText">Oban MHWN (m)<span class="helpIcon" tabindex="0" aria-label="Mean High Water Neaps at the base station. Used with MLWN to estimate the neap range. % Spring is calculated from the observed event range between these mean neap and spring ranges." title="Mean High Water Neaps at the base station. Used with MLWN to estimate the neap range. % Spring is calculated from the observed event range between these mean neap and spring ranges.">?</span></span>
-            <input id="obanMhwn" type="number" value="2.90" step="0.01">
+          <label><span class="labelText">Reference-port MHWN (m)<span class="helpIcon" tabindex="0" aria-label="Mean High Water Neaps at the base station. Used with MLWN to estimate the neap range. % Spring is calculated from the observed event range between these mean neap and spring ranges." title="Mean High Water Neaps at the base station. Used with MLWN to estimate the neap range. % Spring is calculated from the observed event range between these mean neap and spring ranges.">?</span></span>
+            <input id="standardMhwn" type="number" value="" step="0.01" readonly>
           </label>
-          <label><span class="labelText">Oban MLWN (m)<span class="helpIcon" tabindex="0" aria-label="Mean Low Water Neaps at the base station. Combined with MHWN to produce the reference neap range used for % Spring." title="Mean Low Water Neaps at the base station. Combined with MHWN to produce the reference neap range used for % Spring.">?</span></span>
-            <input id="obanMlwn" type="number" value="1.80" step="0.01">
+          <label><span class="labelText">Reference-port MLWN (m)<span class="helpIcon" tabindex="0" aria-label="Mean Low Water Neaps at the base station. Combined with MHWN to produce the reference neap range used for % Spring." title="Mean Low Water Neaps at the base station. Combined with MHWN to produce the reference neap range used for % Spring.">?</span></span>
+            <input id="standardMlwn" type="number" value="" step="0.01" readonly>
           </label>
-          <label><span class="labelText">Oban MLWS (m)<span class="helpIcon" tabindex="0" aria-label="Mean Low Water Springs at the base station. Combined with MHWS to produce the reference spring range used for % Spring." title="Mean Low Water Springs at the base station. Combined with MHWS to produce the reference spring range used for % Spring.">?</span></span>
-            <input id="obanMlws" type="number" value="0.70" step="0.01">
+          <label><span class="labelText">Reference-port MLWS (m)<span class="helpIcon" tabindex="0" aria-label="Mean Low Water Springs at the base station. Combined with MHWS to produce the reference spring range used for % Spring." title="Mean Low Water Springs at the base station. Combined with MHWS to produce the reference spring range used for % Spring.">?</span></span>
+            <input id="standardMlws" type="number" value="" step="0.01" readonly>
           </label>
           <label><span class="labelText">Fallback cycle (hours)<span class="helpIcon" tabindex="0" aria-label="Used only at the end of the tide table when there is no following flood commencement row. It gives the active tidal gate a final search window so the last weather hours can still match a tide segment." title="Used only at the end of the tide table when there is no following flood commencement row. It gives the active tidal gate a final search window so the last weather hours can still match a tide segment.">?</span></span>
             <input id="fallbackCycleHours" type="number" value="12.5" min="1" step="0.1">
@@ -371,17 +371,12 @@
       <section id="locationPanel" class="tabPanel">
         <div class="panelHeader">
           <div>
-            <h2>Location Constants</h2>
-            <p>Spring/neap timing constants for each tidal gate. Changes recalculate the tide windows without downloading new data.</p>
-          </div>
-          <div class="panelActions">
-            <button id="addLocation" type="button">Add location</button>
-            <button id="loadLocationConstants" type="button">Load</button>
-            <button id="saveLocationConstants" type="button">Save</button>
+            <h2>Tidal-gate data</h2>
+            <p>Read-only passage constants maintained in AJRM Marine Location Editor.</p>
           </div>
         </div>
-        <p id="locationConstantsStatus" class="dataStatus">Location constants are currently in memory only.</p>
-        <section class="tableWrap inputTableWrap" aria-label="Editable location constants">
+        <p id="locationConstantsStatus" class="dataStatus">Loading shared Location Editor data…</p>
+        <section class="tableWrap inputTableWrap" aria-label="Read-only tidal-gate constants">
           <table id="locationTable">
             <thead></thead>
             <tbody></tbody>

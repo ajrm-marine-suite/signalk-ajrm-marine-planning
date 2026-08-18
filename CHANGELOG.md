@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.5.5 - 2026-08-18
+
+- Remove Gate Passage's duplicated browser defaults, writable constants API,
+  private constants file and editing controls; gate data now comes read-only
+  from versioned Location Editor records.
+- Let Anchor Force select standard ports as well as secondary ports and request
+  the corresponding UKHO station rather than assuming one hard-coded port.
+- Remove port-specific wording and state keys from planner screens and retain a
+  bounded migration for saved state from the former names.
+
 ## 0.5.4 - 2026-08-18
 
 - Consume Oban-linked secondary-port correction records from Location Editor.

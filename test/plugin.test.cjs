@@ -18,8 +18,17 @@ async function fixture(t) {
 	const gate = {
 		id: "0b9ecfef-3260-4f1e-a41f-5f2fdf7dfbec", name: "Cuan Sound", types: ["tidalGate"],
 		feature: { geometry: { type: "Point", coordinates: [-5.637656, 56.27224] } },
+		properties: { tidalGate: {
+			contract: "ajrm-tidal-gate-constants-v1", standardPortRef: "/resources/locations/oban",
+			floodSet: "W", ebbSet: "E", springPeakFlowKnots: 7, neapPeakFlowKnots: 5,
+			floodSpringAfter: "4:30:00", floodNeapAfter: "5:15:00", floodSpringSlack: "0:15:00", floodNeapSlack: "0:40:00",
+			ebbSpringAfter: "-1:45:00", ebbNeapAfter: "-1:00:00", ebbSpringSlack: "0:15:00", ebbNeapSlack: "0:40:00", source: "fixture",
+		} },
 	};
-	const oban = { id: "oban", name: "Oban", types: ["tidalStandardPort"] };
+	const oban = { id: "oban", name: "Oban", types: ["tidalStandardPort"], properties: { tide: {
+		providerId: "ukhoTidalEvents", stationId: "0372", stationName: "Oban",
+		referenceLevels: { mhws: 4, mhwn: 2.9, mlwn: 1.8, mlws: 0.7 },
+	} } };
 	const secondaryPort = {
 		id: "tobermory-location", name: "Tobermory", types: ["tidalSecondaryPort"],
 		properties: { tide: {
@@ -83,6 +92,7 @@ test("gate weather and tides use shared services and authoritative location", as
 	assert.equal(result.body.events[0].EventType, "HighWater");
 	assert.equal(result.body.events[0].DateTime, "2026-08-18T12:00:00.000Z");
 	assert.equal(calls.tide[0].includeEvents, true);
+	assert.equal(calls.tide[0].contextLocationId, "oban");
 	plugin.stop();
 });
 
@@ -111,8 +121,8 @@ test("anchor state contains no API secret and uses shared tide events", async (t
 	assert.equal(result.body.tideData.managedBy, "AJRM Marine Location Editor");
 	assert.equal(result.body.tideData.events[0].Height, 3.2);
 	assert.equal(result.body.tideData.events[0].DateTime, "2026-08-18T12:00:00.000Z");
-	assert.equal(result.body.secondaryPorts[0].id, "tobermory");
-	assert.equal(result.body.secondaryPorts[0].locationId, "tobermory-location");
+	assert.deepEqual(result.body.secondaryPorts.map((port) => port.id), ["oban", "tobermory"]);
+	assert.equal(result.body.secondaryPorts[1].locationId, "tobermory-location");
 	plugin.stop();
 });
 
@@ -124,7 +134,7 @@ test("anchor state ignores submitted secondary-port copies", async (t) => {
 		deletedSecondaryPortIds: ["tobermory"],
 	} });
 	assert.equal(result.statusCode, 200);
-	assert.deepEqual(result.body.secondaryPorts.map((port) => port.id), ["tobermory"]);
+	assert.deepEqual(result.body.secondaryPorts.map((port) => port.id), ["oban", "tobermory"]);
 	plugin.stop();
 });
 
