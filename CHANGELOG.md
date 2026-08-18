@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.8 - 2026-08-18
+
+- Accept the paired 12-hour `ajrm-secondary-port-corrections-v3` records from
+  Location Editor while retaining bounded read-only v2 compatibility.
+
 ## 0.5.7 - 2026-08-18
 
 - Remove manual reference-port HW/LW entry and browser-side secondary-port

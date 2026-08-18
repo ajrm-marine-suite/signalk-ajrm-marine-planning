@@ -10,7 +10,7 @@ const tobermory = {
 	properties: { tide: {
 		parentLocationRef: "/resources/locations/oban",
 		secondaryPortCorrections: {
-			contract: "ajrm-secondary-port-corrections-v2", legacyId: "tobermory",
+			contract: "ajrm-secondary-port-corrections-v3", timeOffsetPeriodMinutes: 720, legacyId: "tobermory",
 			parentReferenceLevels: { mhws: 4, mhwn: 2.9, mlwn: 1.8, mlws: 0.7 },
 			highWaterTimeOffsets: [{ referenceTimeMinutes: 60, offsetMinutes: 20 }],
 			lowWaterTimeOffsets: [{ referenceTimeMinutes: 80, offsetMinutes: 20 }],

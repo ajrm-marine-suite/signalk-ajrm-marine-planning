@@ -4,7 +4,11 @@
  * Planning deliberately does not persist or edit this data.
  */
 
-const CORRECTION_CONTRACT = "ajrm-secondary-port-corrections-v2";
+const CORRECTION_CONTRACT = "ajrm-secondary-port-corrections-v3";
+const SUPPORTED_CORRECTION_CONTRACTS = new Set([
+	"ajrm-secondary-port-corrections-v2",
+	CORRECTION_CONTRACT,
+]);
 
 function secondaryPortsFromLocations(locations, options = {}) {
 	const values = Array.isArray(locations) ? locations : [];
@@ -15,7 +19,7 @@ function secondaryPortsFromLocations(locations, options = {}) {
 		if (!Array.isArray(location?.types) || !location.types.includes("tidalSecondaryPort")) return [];
 		const tide = location?.properties?.tide;
 		const correction = tide?.secondaryPortCorrections;
-		if (correction?.contract !== CORRECTION_CONTRACT) return [];
+		if (!SUPPORTED_CORRECTION_CONTRACTS.has(correction?.contract)) return [];
 		const parentId = String(tide?.parentLocationRef || "").replace(/^\/resources\/locations\//, "");
 		const parent = byId.get(parentId);
 		const standardPort = String(correction.standardPortName || parent?.name || "").trim();

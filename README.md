@@ -1,5 +1,10 @@
 # AJRM Marine Planning
 
+Version `0.5.8` accepts Location Editor's simplified Reeds-style v3
+secondary-port contract while retaining read-only compatibility with v2.
+Planning still consumes centrally resolved events and does not duplicate the
+correction calculation or its editor.
+
 Version `0.5.7` removes entered HW/LW values from Anchor Force. Select one of
 Location Editor's standard or secondary ports, or use own-vessel position to
 choose the nearest usable secondary port in the containing tidal region. The
