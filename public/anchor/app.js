@@ -1,5 +1,5 @@
 /** Browser-side anchor load, rode, scope, clearance and catenary model. */
-const webVersion = "0.5.0";
+const webVersion = "0.5.1";
 const halfCycleMinutes = 12 * 60 + 25;
 
 const defaults = {

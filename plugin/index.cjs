@@ -105,12 +105,17 @@ module.exports = function ajrmMarinePlanning(app) {
 
 	plugin.start = () => {
 		running = true;
+		app.ajrmMarinePlanningDiagnostics = Object.freeze({
+			contract: "ajrm-marine-planning-diagnostics-v1",
+			snapshot: diagnosticSnapshot,
+		});
 		app.setPluginStatus?.(`Started v${packageJson.version}`);
 		publishStatus();
 	};
 
 	plugin.stop = () => {
 		running = false;
+		delete app.ajrmMarinePlanningDiagnostics;
 		publishStatus(null);
 		app.setPluginStatus?.("Stopped");
 	};
@@ -220,6 +225,31 @@ module.exports = function ajrmMarinePlanning(app) {
 			weatherService: app.ajrmMarineWeather?.contract || null,
 			ready: running && Boolean(app.ajrmMarineLocations && app.ajrmMarineTides && app.ajrmMarineWeather),
 			updatedAt: new Date().toISOString(),
+		};
+	}
+
+	async function diagnosticSnapshot() {
+		const gateSettings = { ...defaultGateSettings, ...(await readJson(gateSettingsFile, {})) };
+		delete gateSettings.ukhoApiKey;
+		const savedAnchorState = await anchorState();
+		if (savedAnchorState.tideData) {
+			delete savedAnchorState.tideData.ukhoApiKey;
+			delete savedAnchorState.tideData.ukhoAccountEmail;
+			delete savedAnchorState.tideData.events;
+		}
+		return {
+			contract: "ajrm-marine-planning-diagnostics-v1",
+			contractVersion: 1,
+			capturedAt: new Date().toISOString(),
+			status: status(),
+			gate: {
+				settings: gateSettings,
+				locationConstants: await gateConstants(),
+			},
+			anchor: {
+				state: savedAnchorState,
+				liveInputs: liveInputs(),
+			},
 		};
 	}
 

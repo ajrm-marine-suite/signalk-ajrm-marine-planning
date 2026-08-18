@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.1 - 2026-08-18
+
+- Expose a read-only in-process diagnostics snapshot containing planner
+  readiness, Gate Passage settings and location constants, Anchor Force state,
+  and the current live Signal K inputs.
+- Remove provider credentials, account identity and duplicated tide events
+  from this diagnostic projection; Snapshot obtains the authoritative fetched
+  tide and weather series from Location Editor.
+
 ## 0.5.0 - 2026-08-18
 
 - Consolidate Gate Passage Planner and Anchor Force Planner into one Signal K

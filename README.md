@@ -17,6 +17,12 @@ Open **AJRM Marine Planning** from the Signal K webapps list and switch between
 the two planners using the buttons in the header. Calculation constants and
 manual overrides persist in Planning's Signal K data directory.
 
+The read-only `app.ajrmMarinePlanningDiagnostics` contract lets AJRM Marine
+Snapshot retain planner readiness, Gate Passage settings/constants, Anchor
+Force state and the live Signal K inputs used for manual population. It omits
+provider keys, account identity and duplicate tide events; fetched tide and
+weather series come from Location Editor's diagnostic contract.
+
 ## Safety
 
 These are planning aids, not navigation or anchoring authorities. Forecasts,

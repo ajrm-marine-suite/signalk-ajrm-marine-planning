@@ -57,7 +57,7 @@ async function fixture(t) {
 		await routes.get(`${method} ${route}`)({ query: {}, body: {}, ...req }, res);
 		return res;
 	}
-	return { calls, call, plugin };
+	return { app, calls, call, plugin };
 }
 
 test("gate weather and tides use shared services and authoritative location", async (t) => {
@@ -78,4 +78,18 @@ test("anchor state contains no API secret and uses shared tide events", async (t
 	assert.equal(result.body.tideData.managedBy, "AJRM Marine Location Editor");
 	assert.equal(result.body.tideData.events[0].Height, 3.2);
 	plugin.stop();
+});
+
+test("diagnostic snapshot captures planner state without credentials or duplicating tide events", async (t) => {
+	const { app, plugin } = await fixture(t);
+	const snapshot = await app.ajrmMarinePlanningDiagnostics.snapshot();
+	assert.equal(snapshot.contract, "ajrm-marine-planning-diagnostics-v1");
+	assert.equal(snapshot.status.ready, true);
+	assert.ok(snapshot.gate.settings);
+	assert.ok(snapshot.gate.locationConstants["Cuan Sound"]);
+	assert.equal(snapshot.anchor.state.tideData.ukhoApiKey, undefined);
+	assert.equal(snapshot.anchor.state.tideData.ukhoAccountEmail, undefined);
+	assert.equal(snapshot.anchor.state.tideData.events, undefined);
+	plugin.stop();
+	assert.equal(app.ajrmMarinePlanningDiagnostics, undefined);
 });
