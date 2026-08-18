@@ -1,6 +1,14 @@
 /** Browser-side anchor load, rode, scope, clearance and catenary model. */
-const webVersion = "0.5.10";
+import {
+  attachTideCurveHover,
+  tideCurveEventsForDays,
+  tideCurveSvg,
+  tideGraphDays
+} from "../shared/tide-curve.mjs";
+
+const webVersion = "0.5.11";
 const halfCycleMinutes = 12 * 60 + 25;
+const tideGraphDaysStorageKey = "anchorForcePlanner.tideGraphDays.v1";
 
 const defaults = {
   windSpeed: 20,
@@ -36,6 +44,7 @@ let depthSource = "chart";
 let idealRode = null;
 let selectedTideViewKey = "now";
 let saveSettingsTimer = null;
+let tideCurveHover = null;
 let serverState = {
   tide: {
     selectedPortId: ""
@@ -1442,82 +1451,43 @@ function renderForceChart() {
   });
 }
 
+
+function normalizedTideCurveEvents() {
+  return (serverState.tideData.events || []).flatMap((event) => {
+    const date = eventUtcDate(event);
+    const heightM = eventHeight(event);
+    if (!date || !Number.isFinite(heightM)) return [];
+    return [{
+      at: date.toISOString(),
+      heightM,
+      type: event.EventType === "HighWater" ? "high" : "low"
+    }];
+  });
+}
+
+function selectedTideGraphDays() {
+  try {
+    return tideGraphDays(localStorage.getItem(tideGraphDaysStorageKey));
+  } catch {
+    return tideGraphDays(null);
+  }
+}
+
 function renderTideCurve() {
   const target = document.getElementById("tideCurve");
-  if (!target) return;
-  target.innerHTML = "";
-  const tide = activeTideValues();
-  const tideSourceLabel = selectedTidePort()?.name || "no selected port";
+  const range = document.getElementById("tideGraphDays");
+  if (!target || !range) return;
+  const days = selectedTideGraphDays();
+  range.value = String(days);
+  tideCurveHover?.destroy();
+  tideCurveHover = null;
   const now = new Date();
-  const timeline = activeTideTimeline(now);
-  if (!timeline) {
-    target.append(
-      svg("rect", { x: 0, y: 0, width: 820, height: 280, fill: "#ffffff" }),
-      svg("text", { x: 410, y: 140, fill: "#64727d", "font-size": 17, "text-anchor": "middle" }, [document.createTextNode("No tide prediction data for the selected port")])
-    );
-    return;
-  }
-  const nowMinutes = nowMinutesForDisplayMode(now);
-  const width = 680;
-  const height = 170;
-  const left = 76;
-  const top = 42;
-  const bottom = top + height;
-  const samples = [];
-  for (let minute = 0; minute <= 1440; minute += 15) {
-    samples.push({ minute, height: tideAtMinute(tide, minute, timeline) });
-  }
-  const visibleEvents = (timeline || tideEventsForRange(tide, 0, 1440))
-    .filter((event) => event.minute >= 0 && event.minute <= 1440)
-    .map((event) => ({
-      ...event,
-      height: Number(event.height)
-    }));
-  const eventHeights = visibleEvents.map((event) => event.height);
-  const heights = [...samples.map((sample) => sample.height), ...eventHeights];
-  const minHeight = Math.min(...heights);
-  const maxHeight = Math.max(...heights);
-  const pad = Math.max(0.2, (maxHeight - minHeight) * 0.12);
-  const yMin = minHeight - pad;
-  const yMax = maxHeight + pad;
-  const xFor = (minute) => left + (minute / 1440) * width;
-  const yFor = (value) => bottom - ((value - yMin) / Math.max(0.1, yMax - yMin)) * height;
-  const path = samples.map((sample, index) => `${index === 0 ? "M" : "L"}${xFor(sample.minute)} ${yFor(sample.height)}`).join(" ");
-  target.append(
-    svg("rect", { x: 0, y: 0, width: 820, height: 280, fill: "#ffffff" }),
-    svg("text", { x: left, y: 24, fill: "#17212b", "font-size": 16, "font-weight": 700 }, [document.createTextNode(`24 hour tide curve: ${tideSourceLabel} (${timeBasisLabel()})`)]),
-    svg("line", { x1: left, y1: top, x2: left, y2: bottom, stroke: "#9aa8b3" }),
-    svg("line", { x1: left, y1: bottom, x2: left + width, y2: bottom, stroke: "#9aa8b3" }),
-    svg("path", { d: path, fill: "none", stroke: "#1f6f8b", "stroke-width": 4, "stroke-linecap": "round", "stroke-linejoin": "round" })
-  );
-  [0, 360, 720, 1080, 1440].forEach((minute) => {
-    const x = xFor(minute);
-    target.append(
-      svg("line", { x1: x, y1: top, x2: x, y2: bottom, stroke: "#e2e8ee", "stroke-width": 1 }),
-      svg("text", { x: x - 14, y: bottom + 22, fill: "#17212b", "font-size": 15 }, [document.createTextNode(minute === 1440 ? "24:00" : minutesToTime(minute))])
-    );
-  });
-  [minHeight, maxHeight].forEach((value) => {
-    const y = yFor(value);
-    target.append(
-      svg("line", { x1: left - 5, y1: y, x2: left + width, y2: y, stroke: "#eef2f5", "stroke-width": 1 }),
-      svg("text", { x: 18, y: y + 4, fill: "#17212b", "font-size": 15 }, [document.createTextNode(fmt(value, 1, " m"))])
-    );
-  });
-  visibleEvents
-    .forEach((event) => {
-      const x = xFor(event.minute);
-      const y = yFor(event.height);
-      target.append(
-        svg("circle", { cx: x, cy: y, r: 5, fill: event.type === "HW" ? "#1f6f8b" : "#6a8a3a" }),
-        svg("text", { x: x + 7, y: y - 8, fill: "#17212b", "font-size": 15 }, [document.createTextNode(`${event.type} ${minutesToTime(event.minute)} ${fmt(event.height, 1, " m")}`)])
-      );
-    });
-  const nowX = xFor(Math.max(0, Math.min(1440, nowMinutes)));
-  target.append(
-    svg("line", { x1: nowX, y1: top, x2: nowX, y2: bottom, stroke: "#b44444", "stroke-width": 2, "stroke-dasharray": "5 5" }),
-    svg("text", { x: Math.min(nowX + 6, left + width - 42), y: top + 14, fill: "#b44444", "font-size": 15, "font-weight": 700 }, [document.createTextNode("now")])
-  );
+  const events = tideCurveEventsForDays(normalizedTideCurveEvents(), now, days);
+  const selected = selectedTidePort();
+  const referenceLevels = serverState.tideData.referenceLevels || portReferenceLevels(selected);
+  const timeZone = displayTimeMode() === "ut" ? "UTC" : undefined;
+  target.innerHTML = tideCurveSvg(events, now, referenceLevels, { timeZone });
+  tideCurveHover = attachTideCurveHover(target, events, { timeZone });
 }
 
 function renderAll() {
@@ -1713,6 +1683,16 @@ document.getElementById("tideDataDisplayMode").addEventListener("change", async 
   }
   applyServerStateToTideFields();
   renderAll();
+});
+
+document.getElementById("tideGraphDays").addEventListener("change", (event) => {
+  const days = tideGraphDays(event.target.value);
+  try {
+    localStorage.setItem(tideGraphDaysStorageKey, String(days));
+  } catch {
+    // Rendering remains usable when browser storage is unavailable.
+  }
+  renderTideCurve();
 });
 
 async function init() {

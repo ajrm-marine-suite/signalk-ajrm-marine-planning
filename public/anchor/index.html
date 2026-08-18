@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Anchor Force Planner</title>
-    <link rel="stylesheet" href="styles.css?v=0.5.10">
+    <link rel="stylesheet" href="styles.css?v=0.5.11">
   </head>
   <body>
     <header class="topbar">
@@ -159,8 +159,18 @@
           <div title="Estimated depth beneath keel right now using the selected depth source."><span>Keel clearance now</span><strong id="currentDepthLabel">-</strong></div>
           <div title="Predicted depth beneath keel at the relevant low water for the Tide tab. This is the grounding check on this tab."><span>Low-water clearance</span><strong id="lowWaterClearanceLabel">-</strong></div>
         </section>
-        <section class="chartPanel tideCurvePanel" aria-label="24 hour tide curve">
-          <svg id="tideCurve" viewBox="0 0 820 280" role="img" aria-label="24 hour tide curve"></svg>
+        <section class="chartPanel tideCurvePanel" aria-label="Predicted tide curve">
+          <div class="tideCurveToolbar">
+            <label for="tideGraphDays">Graph range</label>
+            <select id="tideGraphDays" title="Number of future days shown on the tide curve. This preference is remembered on this browser.">
+              <option value="1">1 day</option>
+              <option value="2">2 days</option>
+              <option value="3">3 days</option>
+              <option value="5">5 days</option>
+              <option value="7">7 days</option>
+            </select>
+          </div>
+          <div id="tideCurve" class="ajrm-tide-curve" aria-label="Tide curve"></div>
         </section>
         <section id="tideStatus" class="statusBanner">-</section>
       </section>
@@ -354,6 +364,6 @@
       </section>
     </main>
 
-    <script src="app.js?v=0.5.10"></script>
+    <script type="module" src="app.js?v=0.5.11"></script>
   </body>
 </html>

@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.5.11 - 2026-08-18
+
+- Replace Anchor Force's separate 24-hour SVG with the same versioned tide
+  curve used by Display.
+- Add a remembered 1–7 day graph range, zero-metre Chart Datum baseline,
+  labelled extremes, station reference levels and interactive time/height
+  hover readout.
+- Preserve the selected local or UTC time basis when formatting the shared
+  curve.
+
 ## 0.5.10 - 2026-08-18
 
 - Fix Anchor Force startup after the manual HW/LW controls were removed, so it

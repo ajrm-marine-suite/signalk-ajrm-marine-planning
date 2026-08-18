@@ -1,6 +1,7 @@
 # AJRM Marine Planning
 
-Version `0.5.10` is aligned with Location Editor's current contracts. Anchor
+Version `0.5.11` uses Display's shared tide-curve renderer in Anchor Force and
+remains aligned with Location Editor's current contracts. Anchor
 Force lists every standard port and every v4 secondary port, while Location
 Editor remains responsible for selection resolution, correction interpolation,
 provider access and caching. Gate Passage reads only v1 tidal-gate records and

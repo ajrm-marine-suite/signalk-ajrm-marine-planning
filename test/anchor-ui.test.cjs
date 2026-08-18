@@ -11,6 +11,7 @@ const gateHtml = fs.readFileSync(path.join(__dirname, "../public/gate/index.html
 const gateScript = fs.readFileSync(path.join(__dirname, "../public/gate/app.js"), "utf8");
 const suiteHtml = fs.readFileSync(path.join(__dirname, "../public/index.html"), "utf8");
 const adapter = fs.readFileSync(path.join(__dirname, "../plugin/secondary-ports.cjs"), "utf8");
+const sharedTideCurve = fs.readFileSync(path.join(__dirname, "../public/shared/tide-curve.mjs"), "utf8");
 
 test("anchor tide UI selects Location Editor ports without entered HW/LW fields", () => {
 	assert.match(html, /id="tidePortSelect"/);
@@ -33,8 +34,18 @@ test("port changes use focused APIs and do not reapply secondary corrections", (
 	assert.doesNotMatch(script, /function secondaryEventFromReferencePortEvent/);
 });
 
+test("Anchor Force uses Display's shared tide-curve renderer", () => {
+	assert.match(html, /id="tideGraphDays"/);
+	assert.match(html, /id="tideCurve" class="ajrm-tide-curve"/);
+	assert.match(html, /<script type="module" src="app\.js/);
+	assert.match(script, /from "\.\.\/shared\/tide-curve\.mjs"/);
+	assert.match(sharedTideCurve, /export function tideCurveSvg/);
+	assert.match(sharedTideCurve, /export function attachTideCurveHover/);
+	assert.doesNotMatch(script, /24 hour tide curve/);
+});
+
 test("planning webapps publish one cache-busted release and no retired standalone controls", () => {
-	for (const source of [html, gateHtml, suiteHtml]) assert.match(source, /0\.5\.10/);
+	for (const source of [html, gateHtml, suiteHtml]) assert.match(source, /0\.5\.11/);
 	assert.doesNotMatch(html, /anchor-force-planner|tideDataAccountEmail|tideDataApiKey/);
 	assert.doesNotMatch(gateHtml, /gate-passage-planner|id="ukhoApiKey"|id="ukhoAccountEmail"/);
 	assert.doesNotMatch(gateScript, /function (?:saveLocationConstants|addLocation|deleteLocation|defaultLocationValues)/);

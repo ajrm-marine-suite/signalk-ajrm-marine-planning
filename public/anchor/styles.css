@@ -590,10 +590,101 @@ select {
   margin: 0 0 10px;
 }
 
-#tideCurve {
+.tideCurveToolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.tideCurveToolbar label {
+  font-weight: 700;
+}
+
+.ajrm-tide-curve {
+  min-height: 12rem;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+}
+
+.ajrm-tide-curve svg {
   display: block;
   width: 100%;
   height: auto;
+  overflow: visible;
+}
+
+.ajrm-tide-curve .axis {
+  stroke: #64727d;
+  stroke-width: 1;
+}
+
+.ajrm-tide-curve .curve {
+  fill: none;
+  stroke: var(--water);
+  stroke-width: 4;
+}
+
+.ajrm-tide-curve .now {
+  stroke: #b44444;
+  stroke-dasharray: 5 4;
+  stroke-width: 2;
+}
+
+.ajrm-tide-curve .tide-reference {
+  stroke: #64727d;
+  stroke-dasharray: 2 5;
+  stroke-width: 1;
+  opacity: .55;
+}
+
+.ajrm-tide-curve .tide-reference-label {
+  fill: #64727d;
+  font-size: 12px;
+}
+
+.ajrm-tide-curve .tide-hover-guide {
+  stroke: var(--ink);
+  stroke-dasharray: 3 4;
+  stroke-width: 1;
+}
+
+.ajrm-tide-curve .tide-hover-dot {
+  fill: var(--panel);
+  stroke: var(--water);
+  stroke-width: 3;
+}
+
+.ajrm-tide-curve circle {
+  fill: var(--water);
+}
+
+.ajrm-tide-curve text {
+  fill: var(--ink);
+  font: 14px system-ui, sans-serif;
+}
+
+.ajrm-tide-curve .extreme-height {
+  font-weight: 700;
+}
+
+.ajrm-tide-curve .extreme-time {
+  font-size: 13px;
+}
+
+.ajrm-tide-hover-readout {
+  position: fixed;
+  z-index: 2000;
+  max-width: min(22rem, calc(100vw - 1rem));
+  padding: .35rem .55rem;
+  border: 1px solid var(--line);
+  border-radius: .35rem;
+  background: var(--panel);
+  box-shadow: 0 .2rem .7rem rgba(0, 0, 0, .18);
+  color: var(--ink);
+  font-size: .85rem;
+  pointer-events: none;
 }
 
 .summary div {
