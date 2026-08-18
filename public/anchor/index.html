@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Anchor Force Planner</title>
-    <link rel="stylesheet" href="styles.css?v=0.5.8">
+    <link rel="stylesheet" href="styles.css?v=0.5.9">
   </head>
   <body>
     <header class="topbar">
@@ -23,10 +23,10 @@
         <button class="tabButton active" type="button" data-tab="planner" title="Main anchoring planner: enter conditions, choose a tide view, and see rode, clearance, catenary, and anchor holding checks.">Planner</button>
         <button class="tabButton" type="button" data-tab="tide" title="Select a Location Editor tidal port and inspect its tide rise, spring percentage, keel clearance, and tide curve.">Tide</button>
         <button class="tabButton" type="button" data-tab="tideData" title="Fetch and inspect downloaded tide events for the selected standard port from the configured tide API.">Tide Data</button>
-        <button class="tabButton" type="button" data-tab="settings" title="Boat constants, ground tackle, echo-sounder mode, API settings, and save/reset controls.">Settings</button>
+        <button class="tabButton" type="button" data-tab="settings" title="Boat constants, ground tackle, echo-sounder mode, time display, and save/reset controls.">Settings</button>
         <button class="tabButton" type="button" data-tab="force" title="Wind force lookup table and curve using the current boat windage settings.">Wind Force</button>
         <button class="tabButton" type="button" data-tab="formulas" title="Formula notes for the calculations used by the app.">Formulas</button>
-        <button class="tabButton" type="button" data-tab="about" title="Web and server version details, useful for confirming a Lubuntu update has taken effect.">About</button>
+        <button class="tabButton" type="button" data-tab="about" title="Web and server version details, useful for confirming a plugin update has taken effect.">About</button>
       </nav>
 
       <section id="plannerPanel" class="tabPanel active">
@@ -130,7 +130,7 @@
         <section class="inputPanel settingsPanel" aria-label="Tide settings">
           <div class="depthSourcePanel tideSourcePanel" aria-label="Tide source">
             <label title="Standard and secondary prediction ports supplied by AJRM Marine Location Editor.">Tidal port
-              <select id="secondaryPortSelect">
+              <select id="tidePortSelect">
                 <option value="">Select a tidal port</option>
               </select>
             </label>
@@ -169,13 +169,13 @@
         <div class="panelHeader">
           <div>
             <h2>Tide Data</h2>
-            <p>Download and manage tide events for the selected standard port from the ADMIRALTY UK Tidal API.</p>
+            <p>Inspect centrally resolved tide events for the selected standard or secondary port.</p>
           </div>
           <button id="refreshTideData" type="button" title="Fetch fresh reference-port tide data, or use today's server cache if it is still fresh.">Refresh tides</button>
         </div>
         <section class="tideSummary compactSummary" aria-label="Tide data status">
           <div title="Configured standard-port tide station used for downloads."><span>Station</span><strong id="tideDataStationLabel">-</strong></div>
-          <div title="Whether the local server has an API key stored or available from the environment."><span>API key</span><strong id="tideDataKeyLabel">-</strong></div>
+          <div title="Whether Location Editor's shared UKHO provider is configured."><span>Shared UKHO</span><strong id="tideDataKeyLabel">-</strong></div>
           <div title="When the local server last fetched or cached tide data."><span>Fetched</span><strong id="tideDataFetchedLabel">-</strong></div>
           <div title="Number of downloaded high-water and low-water events currently available."><span>Events</span><strong id="tideDataCountLabel">-</strong></div>
           <div title="Whether the displayed tide data is fresh, cached, stale, or unavailable."><span>Status</span><strong id="tideDataStatusLabel">-</strong></div>
@@ -282,17 +282,8 @@
                 <option value="local">Local time</option>
               </select>
             </label>
-            <label title="Configure the account and subscription key in AJRM Marine Location Editor; Planning does not keep another copy.">UKHO account email (Location Editor)
-              <input id="tideDataAccountEmail" type="email" autocomplete="email" placeholder="Configure in Location Editor" disabled>
-            </label>
-            <label title="Configure this key once in AJRM Marine Location Editor.">UKHO API key (Location Editor)
-              <input id="tideDataApiKey" type="password" autocomplete="off" placeholder="Configure in Location Editor" disabled>
-            </label>
           </div>
-          <div class="secondaryActions">
-            <button id="saveTideDataSettings" type="button" title="Save the display-time choice. Tidal station and credentials are managed by Location Editor.">Save display setting</button>
-            <button id="clearTideDataKey" class="dangerButton" type="button" title="Provider credentials are managed by Location Editor." disabled>Clear API key</button>
-          </div>
+          <p class="mutedText">Tidal stations, provider credentials and cached predictions are managed centrally in Location Editor. The display-time choice is saved when changed.</p>
         </section>
         <section class="inputPanel settingsPanel settingsActionsPanel" aria-label="Settings actions">
           <h3>Settings actions</h3>
@@ -359,17 +350,10 @@
           <div title="Address and port reported by the local server. Use this host and port from an iPad on the same network."><span>Server address</span><strong id="serverAddress">-</strong></div>
           <div title="When the local server process started. If this predates a git pull, restart the server."><span>Server started</span><strong id="serverStarted">-</strong></div>
         </section>
-        <section class="serviceHelp" aria-label="Server service commands">
-          <h3>Server Control On Lubuntu</h3>
-          <p>Use the desktop Start/Stop icons, or run these user-service commands in a terminal:</p>
-          <code>systemctl --user start anchor-force-planner</code>
-          <code>systemctl --user stop anchor-force-planner</code>
-          <code>systemctl --user status anchor-force-planner</code>
-          <code>journalctl --user -u anchor-force-planner -f</code>
-        </section>
+        <p class="dataStatus">This webapp is served by the AJRM Marine Planning Signal K plugin. Enable or disable it from Signal K Server → Plugin Config.</p>
       </section>
     </main>
 
-    <script src="app.js?v=0.5.8"></script>
+    <script src="app.js?v=0.5.9"></script>
   </body>
 </html>

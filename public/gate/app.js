@@ -1,6 +1,6 @@
 /** Browser-side gate-passage model and UI, backed by shared Signal K services. */
 const $ = (id) => document.getElementById(id);
-const webVersion = "0.5.8";
+const webVersion = "0.5.9";
 
 const selectedColumns = [
   { label: "Local Time (UK)", source: "Local Time", format: "localTimeWithDay" },
@@ -55,7 +55,7 @@ const timeColumns = [
   "Peak Ebb Time"
 ];
 
-const editableTideColumns = [
+const gateCalculationColumns = [
   "HW Time (UTC)",
   "HW Height (m)",
   "Range (m)",
@@ -148,11 +148,10 @@ let hourRepeatDelayTimer = null;
 const weatherRowsByGate = new Map();
 const weatherStatusByGate = new Map();
 let appSettings = {
-  selectedGate: "Cuan Sound",
+  selectedGate: "",
   selectedHeading: "270",
   selectedCrewCapability: "competent",
   speed: "5",
-  ukhoAccountEmail: "",
   standardMhws: "",
   standardMhwn: "",
   standardMlwn: "",
@@ -300,10 +299,6 @@ function cardinalToDegrees(cardinalString) {
   };
   const key = cardinalString.toUpperCase().trim();
   return Object.prototype.hasOwnProperty.call(directions, key) ? directions[key] : "N/A";
-}
-
-function knotsToBeaufort(knots) {
-  return beaufortBand(knots).force;
 }
 
 function beaufortBand(knots) {
@@ -680,79 +675,8 @@ function shiftDateString(value, minutes) {
   return formatDateTime(ms + (minutes * 60 * 1000));
 }
 
-function shiftTideRowsToWeatherWindow(tidesArray, weatherArray) {
-  if (!tidesArray?.length || !weatherArray?.length) return tidesArray;
-  const headers = tidesArray[0];
-  const dateColumns = ["HW Time (UTC)", ...timeColumns];
-  const firstWeather = parseTime(weatherArray[1]?.[0]);
-  const firstTideColumn = headers.includes("HW Time (UTC)") ? "HW Time (UTC)" : "Local Time";
-  const firstTide = parseTime(tidesArray[1]?.[headers.indexOf(firstTideColumn)]);
-  if (Number.isNaN(firstWeather) || Number.isNaN(firstTide)) return tidesArray;
-
-  const dayMs = 24 * 60 * 60 * 1000;
-  let dayShift = Math.round((firstWeather - firstTide) / dayMs);
-  const shiftedFirstFlood = parseTime(shiftDateString(tidesArray[1][headers.indexOf("Flood Commences")], dayShift * 24 * 60));
-  if (!Number.isNaN(shiftedFirstFlood) && shiftedFirstFlood > firstWeather) dayShift -= 1;
-
-  return tidesArray.map((row, rowIndex) => {
-    if (rowIndex === 0 || dayShift === 0) return row;
-    const next = [...row];
-    for (const column of dateColumns) {
-      const colIndex = headers.indexOf(column);
-      if (colIndex !== -1) next[colIndex] = shiftDateString(next[colIndex], dayShift * 24 * 60);
-    }
-    return next;
-  });
-}
-
-function scaleDurationString(value, scale) {
-  if (!value || typeof value !== "string" || !value.includes(":")) return value;
-  const sign = value.startsWith("-") ? -1 : 1;
-  const clean = value.replace("-1 day,", "").replace("-", "").trim();
-  const [hours = 0, minutes = 0, seconds = 0] = clean.split(":").map(Number);
-  let totalSeconds = Math.round((hours * 3600 + minutes * 60 + seconds) * scale);
-  totalSeconds *= sign;
-  const abs = Math.abs(totalSeconds);
-  const h = Math.floor(abs / 3600);
-  const m = Math.floor((abs % 3600) / 60);
-  const s = abs % 60;
-  const text = `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-  return totalSeconds < 0 ? `-${text}` : text;
-}
-
-function tidesForGate(tidesArray, gateName) {
-  const selected = locationConstants[gateName] || locationConstants["Cuan Sound"];
-  const base = locationConstants["Cuan Sound"];
-  const headers = tidesArray[0];
-  const idx = (name) => headers.indexOf(name);
-  return tidesArray.map((row, rowIndex) => {
-    if (rowIndex === 0) return row;
-    const next = [...row];
-    const springFactor = Number(row[idx("% Spring")] || 0);
-    const floodShift = interpolateMinutes(selected, "floodSpringAfter", "floodNeapAfter", springFactor)
-      - interpolateMinutes(base, "floodSpringAfter", "floodNeapAfter", springFactor);
-    const ebbShift = interpolateMinutes(selected, "ebbSpringAfter", "ebbNeapAfter", springFactor)
-      - interpolateMinutes(base, "ebbSpringAfter", "ebbNeapAfter", springFactor);
-    const selectedFloodSlack = interpolateMinutes(selected, "floodSpringSlack", "floodNeapSlack", springFactor);
-    const selectedEbbSlack = interpolateMinutes(selected, "ebbSpringSlack", "ebbNeapSlack", springFactor);
-    const selectedAverageSlack = (selectedFloodSlack + selectedEbbSlack) / 2;
-
-    for (const column of timeColumns) {
-      const shift = column.startsWith("Flood") || column === "Peak Flood Time" ? floodShift : ebbShift;
-      next[idx(column)] = shiftDateString(next[idx(column)], shift);
-    }
-    next[idx("Peak Flood Dir (deg)")] = cardinalToDegrees(selected.floodSet);
-    next[idx("Peak Flood (Set)")] = selected.floodSet;
-    next[idx("Peak Ebb Dir (deg)")] = cardinalToDegrees(selected.ebbSet);
-    next[idx("Peak Ebb (Set)")] = selected.ebbSet;
-    next[idx("Slack Duration")] = minutesToDuration(selectedAverageSlack);
-    next[idx("Location")] = gateName;
-    return next;
-  });
-}
-
 function tideCalculationRowsFromEvents(eventRows, gateName) {
-  const selected = locationConstants[gateName] || locationConstants["Cuan Sound"];
+  const selected = locationConstants[gateName];
   const headers = [
     "HW Time (UTC)", "HW Height (m)", "Range (m)", "% Spring",
     "Peak Flow (kn)", "Peak Flood Dir (deg)", "Peak Flood (Set)",
@@ -761,7 +685,7 @@ function tideCalculationRowsFromEvents(eventRows, gateName) {
     "Ebb Slack Ends", "Peak Ebb Time", "Flood Time Diff", "Slack Duration",
     "Ebb Time Diff", "Location"
   ];
-  if (!eventRows?.length) return [headers];
+  if (!selected || !eventRows?.length) return [headers];
   const sourceHeaders = eventRows[0];
   const idx = (name) => sourceHeaders.indexOf(name);
   const rows = [headers];
@@ -1481,54 +1405,11 @@ function escapeHtml(value) {
     .replaceAll('"', "&quot;");
 }
 
-function parseEditedValue(value, columnName = "") {
-  const trimmed = value.trim();
-  if (trimmed === "") return "";
-  if (columnName.includes("Dir (deg)")) {
-    const direction = cardinalToDegrees(trimmed);
-    if (direction !== "N/A") return direction;
-  }
-  const numeric = Number(trimmed);
-  return Number.isNaN(numeric) ? trimmed : numeric;
-}
-
 function googleMapsUrl(location) {
   const latitude = String(location.latitude ?? "").trim();
   const longitude = String(location.longitude ?? "").trim();
   if (!latitude || !longitude) return "";
   return `https://www.google.com/maps?q=${encodeURIComponent(`${latitude},${longitude}`)}`;
-}
-
-function defaultLocationValues(name) {
-  const template = locationConstants["Cuan Sound"] || {};
-  return {
-    location: name,
-    latitude: template.latitude || "",
-    longitude: template.longitude || "",
-    floodSet: template.floodSet || "W",
-    ebbSet: template.ebbSet || "E",
-    springPeakFlow: template.springPeakFlow || "7.0",
-    neapPeakFlow: template.neapPeakFlow || "3.5",
-    floodSpringAfter: template.floodSpringAfter || "0:00:00",
-    floodNeapAfter: template.floodNeapAfter || "0:00:00",
-    floodSpringSlack: template.floodSpringSlack || "0:15:00",
-    floodNeapSlack: template.floodNeapSlack || "0:40:00",
-    ebbSpringAfter: template.ebbSpringAfter || "0:00:00",
-    ebbNeapAfter: template.ebbNeapAfter || "0:00:00",
-    ebbSpringSlack: template.ebbSpringSlack || "0:15:00",
-    ebbNeapSlack: template.ebbNeapSlack || "0:40:00",
-    source: template.source || ""
-  };
-}
-
-function uniqueLocationName(baseName = "New Location") {
-  let name = baseName;
-  let counter = 2;
-  while (locationConstants[name]) {
-    name = `${baseName} ${counter}`;
-    counter++;
-  }
-  return name;
 }
 
 function isLocationComplete(location) {
@@ -1545,7 +1426,10 @@ function isLocationComplete(location) {
     "ebbSpringAfter",
     "ebbNeapAfter"
   ];
-  return requiredFields.every((field) => String(location[field] ?? "").trim() !== "");
+  const levels = location.standardPort?.referenceLevels;
+  return requiredFields.every((field) => String(location[field] ?? "").trim() !== "")
+    && Boolean(location.standardPort?.locationId && location.standardPort?.stationId)
+    && ["mhws", "mhwn", "mlwn", "mlws"].every((key) => Number.isFinite(Number(levels?.[key])));
 }
 
 function syncGateOptions(selected = $("gate").value) {
@@ -1581,24 +1465,6 @@ async function savePlannerSelection() {
   } catch {
     // Selection persistence is helpful, but should never block replanning.
   }
-}
-
-function renameLocation(oldName, newName) {
-  const cleanName = newName.trim();
-  if (!cleanName || cleanName === oldName) return oldName;
-  if (locationConstants[cleanName]) {
-    $("locationConstantsStatus").textContent = `Rename failed: "${cleanName}" already exists.`;
-    return oldName;
-  }
-  const updated = {};
-  for (const [name, values] of Object.entries(locationConstants)) {
-    if (name === oldName) updated[cleanName] = { ...values, location: cleanName };
-    else updated[name] = values;
-  }
-  for (const name of Object.keys(locationConstants)) delete locationConstants[name];
-  Object.assign(locationConstants, updated);
-  if ($("gate").value === oldName) $("gate").value = cleanName;
-  return cleanName;
 }
 
 function renderLocationConstantsTable() {
@@ -1745,7 +1611,7 @@ function rebuildTidesFromLocationConstants() {
   applySelectedStandardPort();
   const settings = settingsFromControls();
   currentTideRows = tideCalculationRowsFromEvents(currentFetchedTideRows, settings.gate);
-  renderReadOnlyTable("gateCalcTable", currentTideRows, editableTideColumns);
+  renderReadOnlyTable("gateCalcTable", currentTideRows, gateCalculationColumns);
   recalculateCurrentPlan();
 }
 
@@ -1766,7 +1632,7 @@ async function loadLocationConstants() {
 function applyLocationConstants(saved) {
   for (const name of Object.keys(locationConstants)) delete locationConstants[name];
   for (const [name, values] of Object.entries(saved)) {
-    locationConstants[name] = defaultLocationValues(name);
+    locationConstants[name] = { location: name };
     for (const column of locationConstantColumns) {
       if (column.key === "location" || column.type === "link" || column.type === "actions") continue;
       if (Object.prototype.hasOwnProperty.call(values, column.key)) {
@@ -1799,58 +1665,12 @@ function applySelectedStandardPort() {
   };
 }
 
-function syncLocationConstantsFromTable() {
-  const updated = {};
-  const rows = $("locationTable").querySelectorAll("tbody tr");
-  for (const row of rows) {
-    const inputs = [...row.querySelectorAll("input[data-location][data-key]")];
-    if (!inputs.length) continue;
-    const values = {};
-    for (const input of inputs) values[input.dataset.key] = input.value.trim();
-    const originalName = inputs[0].dataset.location;
-    const name = values.location || originalName;
-    if (!name) throw new Error("Location name cannot be blank");
-    if (updated[name]) throw new Error(`Duplicate location "${name}"`);
-    updated[name] = defaultLocationValues(name);
-    for (const column of locationConstantColumns) {
-      if (column.key === "location" || column.type === "link" || column.type === "actions") continue;
-      if (Object.prototype.hasOwnProperty.call(values, column.key)) {
-        updated[name][column.key] = column.type === "duration" ? displayDuration(values[column.key]) : values[column.key];
-      }
-    }
-    updated[name].location = name;
-  }
-  for (const name of Object.keys(locationConstants)) delete locationConstants[name];
-  Object.assign(locationConstants, updated);
-  syncGateOptions($("gate").value);
-}
-
-async function saveLocationConstants() {
-  try {
-    syncLocationConstantsFromTable();
-    renderLocationConstantsTable();
-    rebuildTidesFromLocationConstants();
-    const response = await fetch("/plugins/signalk-ajrm-marine-planning/gate/location-constants", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(locationConstants)
-    });
-    if (!response.ok) throw new Error(`server returned ${response.status}`);
-    const result = await response.json().catch(() => ({}));
-    const target = result.path ? result.path.replace(/^.*\/data\//, "data/") : "data/user-location-constants.json";
-    $("locationConstantsStatus").textContent = `Saved location constants to ${target}.`;
-  } catch (error) {
-    $("locationConstantsStatus").textContent = `Save failed: ${error.message}.`;
-  }
-}
-
 async function loadSettings() {
   try {
     const response = await fetch("/plugins/signalk-ajrm-marine-planning/gate/settings");
     if (!response.ok) throw new Error(`server returned ${response.status}`);
     const settings = await response.json();
     appSettings = { ...appSettings, ...settings };
-    $("ukhoAccountEmail").value = settings.ukhoAccountEmail || "";
     if (settings.selectedHeading && [...$("heading").options].some((option) => option.value === settings.selectedHeading)) {
       $("heading").value = settings.selectedHeading;
     }
@@ -1869,8 +1689,6 @@ async function loadSettings() {
 
 async function saveSettings() {
   try {
-    const ukhoApiKey = $("ukhoApiKey").value.trim();
-    const ukhoAccountEmail = $("ukhoAccountEmail").value.trim();
     const selectedGate = $("gate").value;
     const selectedHeading = $("heading").value;
     const selectedCrewCapability = $("crewCapability").value;
@@ -1880,8 +1698,6 @@ async function saveSettings() {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        ukhoApiKey,
-        ukhoAccountEmail,
         selectedGate,
         selectedHeading,
         selectedCrewCapability,
@@ -1891,8 +1707,6 @@ async function saveSettings() {
     });
     if (!response.ok) throw new Error(`server returned ${response.status}`);
     const settings = await response.json();
-    $("ukhoApiKey").value = "";
-    $("ukhoAccountEmail").value = settings.ukhoAccountEmail || ukhoAccountEmail;
     appSettings = { ...appSettings, ...settings };
     if (settings.selectedGate && locationConstants[settings.selectedGate]) $("gate").value = settings.selectedGate;
     if (settings.selectedHeading) $("heading").value = settings.selectedHeading;
@@ -1910,29 +1724,6 @@ async function saveSettings() {
   } catch (error) {
     $("settingsStatus").textContent = `Settings save failed: ${error.message}.`;
   }
-}
-
-function addLocation() {
-  const name = uniqueLocationName();
-  locationConstants[name] = defaultLocationValues(name);
-  syncGateOptions(name);
-  $("gate").value = name;
-  renderLocationConstantsTable();
-  rebuildTidesFromLocationConstants();
-  $("locationConstantsStatus").textContent = `Added "${name}". Edit the row, then Save to write it to data/location-constants.json.`;
-}
-
-function deleteLocation(name) {
-  if (!locationConstants[name]) return;
-  if (Object.keys(locationConstants).length <= 1) {
-    $("locationConstantsStatus").textContent = "Delete failed: at least one location is required.";
-    return;
-  }
-  delete locationConstants[name];
-  syncGateOptions();
-  renderLocationConstantsTable();
-  rebuildTidesFromLocationConstants();
-  $("locationConstantsStatus").textContent = `Deleted "${name}". Save to persist the change.`;
 }
 
 function recalculateCurrentPlan() {
@@ -2078,7 +1869,7 @@ async function refreshTides(options = {}) {
     currentTideMeta = payload.cache;
     renderReadOnlyTable("fetchedTideTable", currentFetchedTideRows, fetchedTideColumns);
     currentTideRows = tideCalculationRowsFromEvents(currentFetchedTideRows, settings.gate);
-    renderReadOnlyTable("gateCalcTable", currentTideRows, editableTideColumns);
+    renderReadOnlyTable("gateCalcTable", currentTideRows, gateCalculationColumns);
     $("dataStatus").textContent = `Tides ${cacheStatusVerb(currentTideMeta, "updated from web")} for ${settings.gate}.`;
     recalculateCurrentPlan();
     const warning = isManualRefresh ? manualRefreshWarning("Tide data", currentTideMeta) : "";
@@ -2124,7 +1915,7 @@ async function loadStoredData() {
   await refreshTides({ skipBusy: true, manualRefresh: false, silent: true });
   renderLocationConstantsTable();
   if (currentWeatherRows) renderReadOnlyTable("weatherDataTable", currentWeatherRows, fetchedWeatherColumns);
-  if (currentTideRows) renderReadOnlyTable("gateCalcTable", currentTideRows, editableTideColumns);
+  if (currentTideRows) renderReadOnlyTable("gateCalcTable", currentTideRows, gateCalculationColumns);
   if (currentFetchedTideRows) renderReadOnlyTable("fetchedTideTable", currentFetchedTideRows, fetchedTideColumns);
   recalculateCurrentPlan();
 }

@@ -1,10 +1,8 @@
 {
-  "selectedGate": "Cuan Sound",
+  "selectedGate": "",
   "selectedHeading": "270",
   "selectedCrewCapability": "competent",
   "speed": "5",
-  "ukhoAccountEmail": "",
-  "ukhoApiKey": "",
   "fallbackCycleHours": "12.5",
   "fallbackEbbHours": "6.2",
   "peakEbbOffsetMinutes": "180",

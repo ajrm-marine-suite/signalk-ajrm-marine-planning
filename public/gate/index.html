@@ -4,13 +4,13 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Passage Planner</title>
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles.css?v=0.5.9">
   </head>
   <body>
     <header class="topbar">
       <div>
         <h1>Gate Passage Planner</h1>
-        <p id="locationLabel">Cuan Sound</p>
+        <p id="locationLabel">Loading tidal gates…</p>
       </div>
       <div class="topActions">
         <button id="refreshWeather" type="button">Refresh weather</button>
@@ -32,7 +32,7 @@
         <button class="tabButton" type="button" data-tab="weatherData">Fetched Weather</button>
         <button class="tabButton" type="button" data-tab="tideData">Fetched Tide Data</button>
         <button class="tabButton" type="button" data-tab="beaufort">Beaufort</button>
-        <button class="tabButton" type="button" data-tab="location">Location Constants</button>
+        <button class="tabButton" type="button" data-tab="location">Tidal Gate Data</button>
         <button class="tabButton" type="button" data-tab="constants">Constants</button>
         <button class="tabButton" type="button" data-tab="about">About</button>
       </nav>
@@ -40,15 +40,10 @@
       <section id="planPanel" class="tabPanel active">
         <section class="controls" aria-label="Passage inputs">
           <label>Tidal gate
-            <select id="gate">
-              <option>Corryvreckan</option>
-              <option selected>Cuan Sound</option>
-              <option>Dorus Mor</option>
-              <option>Sound of Luing</option>
-            </select>
+            <select id="gate"><option value="">Loading Location Editor…</option></select>
           </label>
           <label class="directionReadout">Tide set
-            <output id="gateDirections" aria-live="polite">Flood W / Ebb E</output>
+            <output id="gateDirections" aria-live="polite">Direction not loaded</output>
           </label>
           <label id="courseControl"><span class="labelText">Course<span class="helpIcon" tabindex="0" aria-label="Planned course over the ground, used to compare the boat with wind and tidal stream directions. It affects point of sail, fair/foul tide, SOG, CTS, and gust penalties." title="Planned course over the ground, used to compare the boat with wind and tidal stream directions. It affects point of sail, fair/foul tide, SOG, CTS, and gust penalties.">?</span></span>
             <select id="heading">
@@ -94,7 +89,7 @@
         <section class="freshnessGrid" aria-label="Data freshness">
           <div id="selectedLocationStatus" class="freshnessCard locationCard">
             <span>Selected location</span>
-            <strong>Cuan Sound</strong>
+            <strong>Loading…</strong>
             <small>-</small>
           </div>
           <div id="weatherFreshness" class="freshnessCard">
@@ -153,7 +148,7 @@
         <div class="panelHeader">
           <div>
             <h2>Tidal Gate Calculations</h2>
-            <p>Calculated tidal gate windows used by the passage plan. This is read-only; edit source constants on the Location Constants tab.</p>
+            <p>Calculated tidal gate windows used by the passage plan. This is read-only; edit source constants in Location Editor.</p>
           </div>
         </div>
         <section class="tableWrap inputTableWrap" aria-label="Tidal gate calculations">
@@ -225,12 +220,6 @@
           </label>
           <label><span class="labelText">Displacement (kg)<span class="helpIcon" tabindex="0" aria-label="Your boat displacement. Wave-height comfort thresholds are scaled against the reference displacement, so a heavier boat is treated as tolerating slightly larger seas." title="Your boat displacement. Wave-height comfort thresholds are scaled against the reference displacement, so a heavier boat is treated as tolerating slightly larger seas.">?</span></span>
             <input id="displacement" type="number" value="5604" min="500" max="30000" step="1">
-          </label>
-          <label><span class="labelText">UKHO API key (Location Editor)<span class="helpIcon" tabindex="0" aria-label="The shared tide service and API key are configured in AJRM Marine Location Editor. This planner does not store another copy." title="The shared tide service and API key are configured in AJRM Marine Location Editor. This planner does not store another copy.">?</span></span>
-            <input id="ukhoApiKey" type="password" autocomplete="off" placeholder="Configure in Location Editor" disabled>
-          </label>
-          <label><span class="labelText">UKHO account email (Location Editor)<span class="helpIcon" tabindex="0" aria-label="Configure the ADMIRALTY account and key once in AJRM Marine Location Editor." title="Configure the ADMIRALTY account and key once in AJRM Marine Location Editor.">?</span></span>
-            <input id="ukhoAccountEmail" type="email" autocomplete="email" placeholder="Configure in Location Editor" disabled>
           </label>
           <label><span class="labelText">Base tide station<span class="helpIcon" tabindex="0" aria-label="Reference tide station used for high and low water heights and times. The tidal gate constants then offset from this station to local gate stream timings." title="Reference tide station used for high and low water heights and times. The tidal gate constants then offset from this station to local gate stream timings.">?</span></span>
             <input id="baseTideStationName" type="text" value="" disabled>
@@ -397,17 +386,10 @@
           <div title="Address and port reported by the local server. Use this host and port from an iPad on the same network."><span>Server address</span><strong id="serverAddress">-</strong></div>
           <div title="When the local server process started. If this predates a git pull, restart the server."><span>Server started</span><strong id="serverStarted">-</strong></div>
         </section>
-        <section class="serviceHelp" aria-label="Server service commands">
-          <h3>Server Control On Lubuntu</h3>
-          <p>Use the desktop Start/Stop icons, or run these user-service commands in a terminal:</p>
-          <code>systemctl --user start gate-passage-planner</code>
-          <code>systemctl --user stop gate-passage-planner</code>
-          <code>systemctl --user status gate-passage-planner</code>
-          <code>journalctl --user -u gate-passage-planner -f</code>
-        </section>
+        <p class="dataStatus">This webapp is served by the AJRM Marine Planning Signal K plugin. Enable or disable it from Signal K Server → Plugin Config.</p>
       </section>
     </main>
 
-    <script type="module" src="app.js"></script>
+    <script type="module" src="app.js?v=0.5.9"></script>
   </body>
 </html>

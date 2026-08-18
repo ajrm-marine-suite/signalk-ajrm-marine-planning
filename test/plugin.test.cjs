@@ -35,8 +35,7 @@ async function fixture(t) {
 		properties: { tide: {
 			parentLocationRef: "/resources/locations/oban",
 			secondaryPortCorrections: {
-				contract: "ajrm-secondary-port-corrections-v2", legacyId: "tobermory",
-				parentReferenceLevels: { mhws: 4, mhwn: 2.9, mlwn: 1.8, mlws: 0.7 },
+				contract: "ajrm-secondary-port-corrections-v4", timeOffsetPeriodMinutes: 720,
 				highWaterTimeOffsets: [{ referenceTimeMinutes: 0, offsetMinutes: 20 }],
 				lowWaterTimeOffsets: [{ referenceTimeMinutes: 0, offsetMinutes: 20 }],
 				heightDifferencesM: { mhws: 0.5, mhwn: 0.6, mlwn: 0.1, mlws: 0.2 },
@@ -96,7 +95,8 @@ test("gate weather and tides use shared services and authoritative location", as
 	assert.equal(result.body.events[0].EventType, "HighWater");
 	assert.equal(result.body.events[0].DateTime, "2026-08-18T12:00:00.000Z");
 	assert.equal(calls.tide[0].includeEvents, true);
-	assert.equal(calls.tide[0].contextLocationId, "oban");
+	assert.equal(calls.tide[0].portId, "oban");
+	assert.equal(calls.tide[0].contextLocationId, "0b9ecfef-3260-4f1e-a41f-5f2fdf7dfbec");
 	plugin.stop();
 });
 
@@ -118,17 +118,33 @@ test("gate weather and tides resolve Location Editor services registered by anot
 	plugin.stop();
 });
 
+test("gate settings reject retired provider and location fields", async (t) => {
+	const { call, plugin } = await fixture(t);
+	let result = await call("POST", "/gate/settings", { body: {
+		selectedGate: "Cuan Sound",
+		ukhoApiKey: "must-not-persist",
+		baseTideStationName: "Wrong owner",
+	} });
+	assert.equal(result.statusCode, 200);
+	assert.equal(result.body.selectedGate, "Cuan Sound");
+	assert.equal(result.body.ukhoApiKey, undefined);
+	assert.equal(result.body.baseTideStationName, undefined);
+	result = await call("GET", "/gate/settings");
+	assert.equal(result.body.ukhoApiKey, undefined);
+	assert.equal(result.body.baseTideStationName, undefined);
+	plugin.stop();
+});
+
 test("anchor state contains no API secret and uses shared tide events", async (t) => {
 	const { call, plugin } = await fixture(t);
 	let result = await call("GET", "/anchor/state");
 	assert.deepEqual(result.body.tideData.events, []);
-	result = await call("PUT", "/anchor/tide-port", { body: { selectedPortId: "tobermory" } });
-	assert.equal(result.body.tideData.ukhoApiKey, undefined);
+	result = await call("PUT", "/anchor/tide-port", { body: { selectedPortId: "tobermory-location" } });
 	assert.equal(result.body.tideData.managedBy, "AJRM Marine Location Editor");
 	assert.equal(result.body.tideData.events[0].Height, 3.2);
 	assert.equal(result.body.tideData.events[0].DateTime, "2026-08-18T12:00:00.000Z");
-	assert.deepEqual(result.body.secondaryPorts.map((port) => port.id), ["oban", "tobermory"]);
-	assert.equal(result.body.secondaryPorts[1].locationId, "tobermory-location");
+	assert.deepEqual(result.body.tidePorts.map((port) => port.id), ["oban", "tobermory-location"]);
+	assert.equal(result.body.tidePorts[1].locationId, "tobermory-location");
 	plugin.stop();
 });
 
@@ -136,7 +152,7 @@ test("anchor selects the nearest secondary port in the vessel's tidal region", a
 	const { call, plugin } = await fixture(t);
 	const result = await call("POST", "/anchor/tide-port/recommend");
 	assert.equal(result.statusCode, 200);
-	assert.equal(result.body.tide.selectedPortId, "tobermory");
+	assert.equal(result.body.tide.selectedPortId, "tobermory-location");
 	assert.equal(result.body.tideRecommendation.portName, "Tobermory");
 	assert.equal(result.body.tideRecommendation.regionName, "West Scotland");
 	assert.equal(result.body.tideRecommendation.distanceM, 850);
@@ -145,7 +161,7 @@ test("anchor selects the nearest secondary port in the vessel's tidal region", a
 
 test("anchor clears tide figures when the selected port cannot resolve", async (t) => {
 	const { app, call, plugin } = await fixture(t);
-	await call("PUT", "/anchor/tide-port", { body: { selectedPortId: "tobermory" } });
+	await call("PUT", "/anchor/tide-port", { body: { selectedPortId: "tobermory-location" } });
 	app.ajrmMarineTides.status = async ({ portId }) => ({
 		valid: false,
 		selectedPort: { id: portId, name: "Tobermory" },
@@ -158,15 +174,11 @@ test("anchor clears tide figures when the selected port cannot resolve", async (
 	plugin.stop();
 });
 
-test("anchor state ignores submitted secondary-port copies", async (t) => {
+test("anchor state always derives tide ports from Location Editor", async (t) => {
 	const { call, plugin } = await fixture(t);
-	const result = await call("PUT", "/anchor/state", { body: {
-		tide: { source: "secondary", selectedPortId: "tobermory" },
-		secondaryPorts: [{ id: "spoofed", name: "Wrong owner" }],
-		deletedSecondaryPortIds: ["tobermory"],
-	} });
+	const result = await call("GET", "/anchor/state");
 	assert.equal(result.statusCode, 200);
-	assert.deepEqual(result.body.secondaryPorts.map((port) => port.id), ["oban", "tobermory"]);
+	assert.deepEqual(result.body.tidePorts.map((port) => port.id), ["oban", "tobermory-location"]);
 	plugin.stop();
 });
 
@@ -177,8 +189,6 @@ test("diagnostic snapshot captures planner state without credentials or duplicat
 	assert.equal(snapshot.status.ready, true);
 	assert.ok(snapshot.gate.settings);
 	assert.ok(snapshot.gate.locationConstants["Cuan Sound"]);
-	assert.equal(snapshot.anchor.state.tideData.ukhoApiKey, undefined);
-	assert.equal(snapshot.anchor.state.tideData.ukhoAccountEmail, undefined);
 	assert.equal(snapshot.anchor.state.tideData.events, undefined);
 	plugin.stop();
 	assert.equal(app.ajrmMarinePlanningDiagnostics, undefined);

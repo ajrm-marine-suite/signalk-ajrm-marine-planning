@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.5.9 - 2026-08-18
+
+- Consume only Location Editor's current v4 secondary-port and v1 tidal-gate
+  contracts, using Location UUIDs as stable planner selections.
+- Restore the Anchor Force tidal-port list, including standard ports whose
+  provider details are incomplete so the shared resolver can explain the error.
+- Request a tidal gate's linked standard port explicitly instead of allowing
+  position-based automatic selection to substitute a different port.
+- Remove dead gate editing code, duplicate provider-account controls,
+  hard-coded port defaults and obsolete standalone-service instructions.
+- Report Location Editor service failures in Anchor Force instead of showing an
+  unexplained empty selector.
+
 ## 0.5.8 - 2026-08-18
 
 - Accept the paired 12-hour `ajrm-secondary-port-corrections-v3` records from

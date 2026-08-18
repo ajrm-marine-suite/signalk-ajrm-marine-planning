@@ -1,5 +1,5 @@
 /** Browser-side anchor load, rode, scope, clearance and catenary model. */
-const webVersion = "0.5.8";
+const webVersion = "0.5.9";
 const halfCycleMinutes = 12 * 60 + 25;
 
 const defaults = {
@@ -40,26 +40,20 @@ let selectedTideViewKey = "now";
 let saveSettingsTimer = null;
 let serverState = {
   tide: {
-    selectedPortId: "",
-    standardReferenceLevels: {
-      mhws: 4.0,
-      mhwn: 2.9,
-      mlwn: 1.8,
-      mlws: 0.7
-    }
+    selectedPortId: ""
   },
-  secondaryPorts: [],
+  tidePorts: [],
   tideData: {
     stationName: "",
     stationId: "",
     timeStandard: "UT",
     displayTimeMode: "local",
-    ukhoAccountEmail: "",
     ukhoApiKeySet: false,
     events: [],
     cache: null
   }
 };
+let serverStateError = "";
 
 function escapeHtml(value) {
   const div = document.createElement("div");
@@ -95,13 +89,6 @@ function fmt(value, digits = 1, suffix = "") {
     minimumFractionDigits: digits,
     maximumFractionDigits: digits
   })}${suffix}`;
-}
-
-function fmtOffset(value) {
-  const minutes = Math.round(Number(value || 0));
-  const sign = minutes >= 0 ? "+" : "-";
-  const absolute = Math.abs(minutes);
-  return `${sign}${String(Math.floor(absolute / 60)).padStart(2, "0")}${String(absolute % 60).padStart(2, "0")}`;
 }
 
 function fmtDateTime(value) {
@@ -304,13 +291,9 @@ function mergeServerState(state = {}) {
   return {
     tide: {
       ...serverState.tide,
-      ...(state.tide || {}),
-      standardReferenceLevels: {
-        ...serverState.tide.standardReferenceLevels,
-        ...(state.tide?.standardReferenceLevels || {})
-      }
+      ...(state.tide || {})
     },
-    secondaryPorts: Array.isArray(state.secondaryPorts) ? state.secondaryPorts : [],
+    tidePorts: Array.isArray(state.tidePorts) ? state.tidePorts : [],
     tideData: {
       ...serverState.tideData,
       ...(state.tideData || {})
@@ -322,19 +305,22 @@ function mergeServerState(state = {}) {
 async function loadServerState() {
   try {
     const response = await fetch("/plugins/signalk-ajrm-marine-planning/anchor/state");
-    if (!response.ok) throw new Error("State endpoint failed");
-    serverState = mergeServerState(await response.json());
-  } catch {
+    const value = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(value.error || `State endpoint returned ${response.status}`);
+    serverStateError = "";
+    serverState = mergeServerState(value);
+  } catch (error) {
+    serverStateError = error.message;
     serverState = mergeServerState();
   }
 }
 
-function selectedSecondaryPort() {
-  return serverState.secondaryPorts.find((port) => port.id === serverState.tide.selectedPortId) || null;
+function selectedTidePort() {
+  return serverState.tidePorts.find((port) => port.id === serverState.tide.selectedPortId) || null;
 }
 
 function portReferenceLevels(port) {
-  return port.standardReferenceLevels || serverState.tide.standardReferenceLevels;
+  return port?.standardReferenceLevels || null;
 }
 
 function downloadedReferencePortCycle(now = new Date()) {
@@ -399,11 +385,12 @@ function activeTideValues(now = new Date()) {
 }
 
 function springPercentFromRange(range) {
-	const selected = selectedSecondaryPort();
+	const selected = selectedTidePort();
 	const reference = selected && serverState.tideData.resolvedLocationId === selected.locationId
 		? (serverState.tideData.referenceLevels || portReferenceLevels(selected))
-		: selected ? portReferenceLevels(selected) : serverState.tide.standardReferenceLevels;
-  const springRange = Number(reference.mhws || 0) - Number(reference.mlws || 0);
+		: selected ? portReferenceLevels(selected) : null;
+	if (!reference) return Number.NaN;
+	const springRange = Number(reference.mhws || 0) - Number(reference.mlws || 0);
   const neapRange = Number(reference.mhwn || 0) - Number(reference.mlwn || 0);
   const spread = springRange - neapRange;
   if (![range, springRange, neapRange, spread].every(Number.isFinite) || Math.abs(spread) < 0.01) return Number.NaN;
@@ -664,13 +651,6 @@ function calculateWindDragLimit(input, depthLw) {
   };
 }
 
-function timeMinutes(id) {
-  const tide = activeTideValues();
-  if (id === "hwTime") return timeToMinutes(tide.hwTime);
-  if (id === "lwTime") return timeToMinutes(tide.lwTime);
-  return timeToMinutes(document.getElementById(id).value || "00:00");
-}
-
 function calculateForDepth(input, depthLw) {
   const lowWaterDepth = depthLw + input.lwHeight;
   const highWaterDepth = depthLw + input.hwHeight;
@@ -847,15 +827,15 @@ function clearIdealRodeRecommendation() {
 }
 
 function applyServerStateToTideFields() {
-  document.getElementById("secondaryPortSelect").value = serverState.tide.selectedPortId || "";
-  renderSecondaryTidePreview();
+  document.getElementById("tidePortSelect").value = serverState.tide.selectedPortId || "";
+  renderTidePreview();
 }
 
-function renderSecondaryPortOptions() {
-  const select = document.getElementById("secondaryPortSelect");
+function renderTidePortOptions() {
+  const select = document.getElementById("tidePortSelect");
   select.innerHTML = [
     `<option value="">Select a tidal port</option>`,
-    ...serverState.secondaryPorts
+    ...serverState.tidePorts
       .slice()
       .sort((a, b) => a.name.localeCompare(b.name))
       .map((port) => `<option value="${escapeHtml(port.id)}">${escapeHtml(port.name)} (${escapeHtml(port.kind || "secondary")})</option>`)
@@ -863,8 +843,8 @@ function renderSecondaryPortOptions() {
   select.value = serverState.tide.selectedPortId || "";
 }
 
-function renderSecondaryTidePreview() {
-  const port = selectedSecondaryPort();
+function renderTidePreview() {
+  const port = selectedTidePort();
   const tide = activeTideValues();
   const available = Boolean(port && tide.downloaded && serverState.tideData.resolvedLocationId === port.locationId);
   document.getElementById("secondaryHwTime").textContent = available ? tide.hwTime : "-";
@@ -874,12 +854,14 @@ function renderSecondaryTidePreview() {
   const recommendation = serverState.tideRecommendation;
   document.getElementById("tidePortSelectionStatus").textContent = recommendation
     ? `${recommendation.portName} selected as the nearest secondary port in ${recommendation.regionName || "the current tidal region"} (${fmt(Number(recommendation.distanceM) / 1852, 1, " NM")}).`
-    : port ? `${port.name} selected manually.` : "Choose a port or use own-vessel position to find the nearest regional secondary port.";
+    : port ? `${port.name} selected manually.`
+      : serverStateError ? `Tidal ports could not be loaded: ${serverStateError}`
+        : "Choose a port or use own-vessel position to find the nearest regional secondary port.";
 }
 
-function renderSecondaryPortManager() {
-  renderSecondaryPortOptions();
-  renderSecondaryTidePreview();
+function renderTidePortManager() {
+  renderTidePortOptions();
+  renderTidePreview();
 }
 
 function sortedTideEvents() {
@@ -916,21 +898,19 @@ function pairedTideRange(events, index) {
 function applyTideDataFields() {
   const tideData = serverState.tideData;
   document.getElementById("tideDataStationName").value = tideData.stationName || "";
-  document.getElementById("tideDataStationId").value = tideData.stationId || "0372";
+  document.getElementById("tideDataStationId").value = tideData.stationId || "";
   document.getElementById("tideDataTimeStandard").value = tideData.timeStandard || "UT";
   document.getElementById("tideDataDisplayMode").value = displayTimeMode();
-  document.getElementById("tideDataAccountEmail").value = tideData.ukhoAccountEmail || "";
 }
 
 function renderTideDataManager() {
   const tideData = serverState.tideData;
   const events = sortedTideEvents();
   if (document.activeElement?.id !== "tideDataStationName") document.getElementById("tideDataStationName").value = tideData.stationName || "";
-  if (document.activeElement?.id !== "tideDataStationId") document.getElementById("tideDataStationId").value = tideData.stationId || "0372";
+  if (document.activeElement?.id !== "tideDataStationId") document.getElementById("tideDataStationId").value = tideData.stationId || "";
   if (document.activeElement?.id !== "tideDataTimeStandard") document.getElementById("tideDataTimeStandard").value = tideData.timeStandard || "UT";
   if (document.activeElement?.id !== "tideDataDisplayMode") document.getElementById("tideDataDisplayMode").value = displayTimeMode();
-  if (document.activeElement?.id !== "tideDataAccountEmail") document.getElementById("tideDataAccountEmail").value = tideData.ukhoAccountEmail || "";
-  document.getElementById("tideDataStationLabel").textContent = `${tideData.stationName || ""} ${tideData.stationId || "0372"} (${timeBasisLabel()})`;
+  document.getElementById("tideDataStationLabel").textContent = `${tideData.stationName || "No station selected"}${tideData.stationId ? ` ${tideData.stationId}` : ""} (${timeBasisLabel()})`;
   document.getElementById("tideDataKeyLabel").textContent = tideData.ukhoApiKeySet ? "Set" : "Not set";
   document.getElementById("tideDataFetchedLabel").textContent = fmtDateTime(tideData.cache?.fetchedAt);
   document.getElementById("tideDataCountLabel").textContent = String(events.length);
@@ -1175,7 +1155,7 @@ function updateTideSummary() {
   }
   const tide = currentTide(new Date());
   const spring = springPercentageForNow();
-  const tideSourceLabel = selectedSecondaryPort()?.name || "no selected port";
+  const tideSourceLabel = selectedTidePort()?.name || "no selected port";
   document.getElementById("tideHeight").value = round(tide.height, 1);
   document.getElementById("currentTimeLabel").textContent = formatClock(tide.now);
   document.getElementById("currentRiseLabel").textContent = `${fmt(tide.height, 1, " m")} ${tide.phase.toLowerCase()}`;
@@ -1469,7 +1449,7 @@ function renderTideCurve() {
   if (!target) return;
   target.innerHTML = "";
   const tide = activeTideValues();
-  const tideSourceLabel = selectedSecondaryPort()?.name || "no selected port";
+  const tideSourceLabel = selectedTidePort()?.name || "no selected port";
   const now = new Date();
   const timeline = activeTideTimeline(now);
   if (!timeline) {
@@ -1543,7 +1523,7 @@ function renderTideCurve() {
 }
 
 function renderAll() {
-  renderSecondaryTidePreview();
+  renderTidePreview();
   renderTideDataManager();
   updateTideSummary();
   updatePlannerTideControl();
@@ -1568,7 +1548,7 @@ async function renderAbout() {
   } catch {
     document.getElementById("serverVersion").textContent = "Needs server restart";
     document.getElementById("serverAddress").textContent = location.host || "-";
-    document.getElementById("serverStarted").textContent = "Open the Lubuntu launcher again";
+    document.getElementById("serverStarted").textContent = "Restart Signal K";
   }
 }
 
@@ -1665,7 +1645,7 @@ async function selectTidePort(selectedPortId) {
   renderAll();
 }
 
-document.getElementById("secondaryPortSelect").addEventListener("change", async (event) => {
+document.getElementById("tidePortSelect").addEventListener("change", async (event) => {
   try {
     await selectTidePort(event.target.value);
   } catch (error) {
@@ -1688,52 +1668,6 @@ document.getElementById("recommendSecondaryPort").addEventListener("click", asyn
     document.getElementById("tidePortSelectionStatus").textContent = `Automatic selection failed: ${error.message}`;
   } finally {
     button.disabled = false;
-  }
-});
-
-document.getElementById("saveTideDataSettings").addEventListener("click", async () => {
-  try {
-    const response = await fetch("/plugins/signalk-ajrm-marine-planning/anchor/tide-data/settings", {
-      method: "PUT",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        stationName: document.getElementById("tideDataStationName").value.trim(),
-        stationId: document.getElementById("tideDataStationId").value.trim(),
-        timeStandard: document.getElementById("tideDataTimeStandard").value.trim(),
-        displayTimeMode: document.getElementById("tideDataDisplayMode").value,
-        ukhoAccountEmail: document.getElementById("tideDataAccountEmail").value.trim(),
-        ukhoApiKey: document.getElementById("tideDataApiKey").value.trim()
-      })
-    });
-    if (!response.ok) throw new Error((await response.json().catch(() => ({}))).error || `server returned ${response.status}`);
-    serverState.tideData = await response.json();
-    document.getElementById("tideDataApiKey").value = "";
-    renderTideDataManager();
-  } catch (error) {
-    document.getElementById("tideDataStatusLabel").textContent = `Save failed: ${error.message}`;
-  }
-});
-
-document.getElementById("clearTideDataKey").addEventListener("click", async () => {
-  try {
-    const response = await fetch("/plugins/signalk-ajrm-marine-planning/anchor/tide-data/settings", {
-      method: "PUT",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        stationName: document.getElementById("tideDataStationName").value.trim(),
-        stationId: document.getElementById("tideDataStationId").value.trim(),
-        timeStandard: document.getElementById("tideDataTimeStandard").value.trim(),
-        displayTimeMode: document.getElementById("tideDataDisplayMode").value,
-        ukhoAccountEmail: document.getElementById("tideDataAccountEmail").value.trim(),
-        clearUkhoApiKey: true
-      })
-    });
-    if (!response.ok) throw new Error((await response.json().catch(() => ({}))).error || `server returned ${response.status}`);
-    serverState.tideData = await response.json();
-    document.getElementById("tideDataApiKey").value = "";
-    renderTideDataManager();
-  } catch (error) {
-    document.getElementById("tideDataStatusLabel").textContent = `Clear failed: ${error.message}`;
   }
 });
 
@@ -1770,11 +1704,7 @@ document.getElementById("tideDataDisplayMode").addEventListener("change", async 
       method: "PUT",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        stationName: document.getElementById("tideDataStationName").value.trim(),
-        stationId: document.getElementById("tideDataStationId").value.trim(),
-        timeStandard: document.getElementById("tideDataTimeStandard").value.trim(),
-        displayTimeMode: serverState.tideData.displayTimeMode,
-        ukhoAccountEmail: document.getElementById("tideDataAccountEmail").value.trim()
+        displayTimeMode: serverState.tideData.displayTimeMode
       })
     });
     if (!response.ok) throw new Error((await response.json().catch(() => ({}))).error || `server returned ${response.status}`);
@@ -1792,7 +1722,7 @@ async function init() {
   await loadServerState();
   applyServerStateToTideFields();
   applyTideDataFields();
-  renderSecondaryPortManager();
+  renderTidePortManager();
   renderTideDataManager();
   renderAll();
   renderAbout();

@@ -1,36 +1,39 @@
 /**
- * Adapts Location Editor's authoritative, versioned secondary-port records to
- * the compact correction-table shape consumed by the Anchor Force Planner.
- * Planning deliberately does not persist or edit this data.
+ * Projects Location Editor's current standard- and secondary-port catalogue
+ * into the compact, read-only shape consumed by the Anchor Force Planner.
+ * Planning deliberately neither owns nor edits tidal-location data.
  */
 
-const CORRECTION_CONTRACT = "ajrm-secondary-port-corrections-v3";
-const SUPPORTED_CORRECTION_CONTRACTS = new Set([
-	"ajrm-secondary-port-corrections-v2",
-	CORRECTION_CONTRACT,
-]);
+const CORRECTION_CONTRACT = "ajrm-secondary-port-corrections-v4";
+const LOCATION_REF_PREFIX = "/resources/locations/";
 
-function secondaryPortsFromLocations(locations, options = {}) {
+function referenceId(reference) {
+	const value = String(reference || "");
+	return value.startsWith(LOCATION_REF_PREFIX) ? value.slice(LOCATION_REF_PREFIX.length) : "";
+}
+
+function secondaryPortsFromLocations(locations) {
 	const values = Array.isArray(locations) ? locations : [];
 	const byId = new Map(values.map((location) => [location?.id, location]));
-	const wantedStandardPort = normalize(options.standardPortName || "");
 
 	return values.flatMap((location) => {
 		if (!Array.isArray(location?.types) || !location.types.includes("tidalSecondaryPort")) return [];
 		const tide = location?.properties?.tide;
 		const correction = tide?.secondaryPortCorrections;
-		if (!SUPPORTED_CORRECTION_CONTRACTS.has(correction?.contract)) return [];
-		const parentId = String(tide?.parentLocationRef || "").replace(/^\/resources\/locations\//, "");
+		if (correction?.contract !== CORRECTION_CONTRACT) return [];
+		const parentId = referenceId(tide?.parentLocationRef);
 		const parent = byId.get(parentId);
-		const standardPort = String(correction.standardPortName || parent?.name || "").trim();
-		if (wantedStandardPort && normalize(standardPort) !== wantedStandardPort) return [];
+		if (!parent?.types?.includes("tidalStandardPort")) return [];
+		const standardPort = String(parent.properties?.tide?.stationName || parent.name || "").trim();
 
 		return [{
-			id: String(correction.legacyId || location.id),
+			id: location.id,
 			locationId: location.id,
 			name: location.name,
 			standardPort,
-			standardReferenceLevels: correction.parentReferenceLevels || null,
+			standardPortLocationId: parent.id,
+			stationId: parent.properties?.tide?.stationId || null,
+			standardReferenceLevels: parent.properties?.tide?.referenceLevels || null,
 			hwOffsetPoints: copyPoints(correction.highWaterTimeOffsets),
 			lwOffsetPoints: copyPoints(correction.lowWaterTimeOffsets),
 			heightDiffs: copyGroup(correction.heightDifferencesM, ["mhws", "mhwn", "mlwn", "mlws"]),
@@ -45,7 +48,6 @@ function tideLocationsFromLocations(locations) {
 	const standards = values.flatMap((location) => {
 		if (!location?.types?.includes("tidalStandardPort")) return [];
 		const tide = location.properties?.tide || {};
-		if (!tide.providerId || !tide.stationId) return [];
 		return [{
 			id: location.id,
 			locationId: location.id,
@@ -53,7 +55,7 @@ function tideLocationsFromLocations(locations) {
 			kind: "standard",
 			name: tide.stationName || location.name,
 			standardPort: tide.stationName || location.name,
-			stationId: tide.stationId,
+			stationId: tide.stationId || null,
 			standardReferenceLevels: tide.referenceLevels || null,
 			hwOffsetPoints: [{ referenceTimeMinutes: 0, offsetMinutes: 0 }],
 			lwOffsetPoints: [{ referenceTimeMinutes: 0, offsetMinutes: 0 }],
@@ -61,22 +63,15 @@ function tideLocationsFromLocations(locations) {
 			notes: "Standard prediction port maintained by AJRM Marine Location Editor.",
 		}];
 	});
-	function standardAncestor(location, visited = new Set()) {
-		if (!location || visited.has(location.id)) return null;
-		if (location.types?.includes("tidalStandardPort")) return location;
-		visited.add(location.id);
-		const parentId = String(location.properties?.tide?.parentLocationRef || "").split("/").at(-1);
-		return standardAncestor(byId.get(parentId), visited);
-	}
 	const secondaries = secondaryPortsFromLocations(values).flatMap((port) => {
-		const location = values.find((entry) => entry.id === port.locationId);
-		const parent = standardAncestor(location);
-		if (!parent?.properties?.tide?.providerId || !parent.properties.tide.stationId) return [];
+		const parent = byId.get(port.standardPortLocationId);
+		if (!parent) return [];
 		return [{
 			...port,
 			kind: "secondary",
-			standardPortLocationId: parent?.id || null,
-			stationId: parent?.properties?.tide?.stationId || null,
+			standardPortLocationId: parent.id,
+			stationId: parent.properties?.tide?.stationId || null,
+			standardReferenceLevels: parent.properties?.tide?.referenceLevels || null,
 		}];
 	});
 	return [...standards, ...secondaries].sort((left, right) => left.name.localeCompare(right.name));
@@ -94,9 +89,5 @@ function copyPoints(value) {
 }
 
 function zeroGroup(keys) { return Object.fromEntries(keys.map((key) => [key, 0])); }
-
-function normalize(value) {
-	return String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
-}
 
 module.exports = { CORRECTION_CONTRACT, secondaryPortsFromLocations, tideLocationsFromLocations };

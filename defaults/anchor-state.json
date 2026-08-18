@@ -1,23 +1,11 @@
 {
   "tide": {
-    "selectedPortId": "",
-    "standardReferenceLevels": {
-      "mhws": 4,
-      "mhwn": 2.9,
-      "mlwn": 1.8,
-      "mlws": 0.7
-    }
+    "selectedPortId": ""
   },
-  "secondaryPorts": [],
+  "tidePorts": [],
   "tideData": {
-    "stationName": "",
-    "stationId": "",
-    "timeStandard": "UT",
     "displayTimeMode": "local",
-    "ukhoAccountEmail": "",
-    "ukhoApiKey": "",
     "events": [],
-    "cache": null,
-    "ukhoApiKeySet": false
+    "cache": null
   }
 }
