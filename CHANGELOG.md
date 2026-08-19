@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.15 - 2026-08-19
+
+- Package the Marine Planning icon at both the npm root for App Store metadata
+  and the public webapp root for the installed Webapps catalogue.
+
 ## 0.5.14 - 2026-08-19
 
 - Serve the Marine Planning Webapps icon from the public webapp URL and add a
