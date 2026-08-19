@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.13 - 2026-08-19
+
+- Add a suite-style Marine Planning icon and package-root 120-pixel PNG for the
+  Signal K Webapps page.
+
 ## 0.5.12 - 2026-08-18
 
 - Unwrap Signal K full-model leaves before copying live wind, current, depth,

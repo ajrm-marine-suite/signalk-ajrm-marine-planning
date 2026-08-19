@@ -1,6 +1,6 @@
 {
   "name": "signalk-ajrm-marine-planning",
-  "version": "0.5.12",
+  "version": "0.5.13",
   "description": "Consolidated Signal K gate-passage and anchor-force planning using shared locations, tides and weather.",
   "keywords": [
     "signalk-node-server-plugin",
@@ -23,7 +23,8 @@
   },
   "signalk-plugin-enabled-by-default": true,
   "signalk": {
-    "displayName": "AJRM Marine Planning"
+    "displayName": "AJRM Marine Planning",
+    "appIcon": "./icon-120.png"
   },
   "repository": {
     "type": "git",
@@ -41,6 +42,7 @@
   "files": [
     "plugin",
     "public",
+    "icon-120.png",
     "defaults",
     "README.md",
     "CHANGELOG.md",
