@@ -1,5 +1,8 @@
 # AJRM Marine Planning
 
+Version `0.5.14` serves the Signal K Webapps icon from the public webapp URL
+and verifies the metadata-to-file contract during tests.
+
 Version `0.5.11` uses Display's shared tide-curve renderer in Anchor Force and
 remains aligned with Location Editor's current contracts. Anchor
 Force lists every standard port and every v4 secondary port, while Location

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.14 - 2026-08-19
+
+- Serve the Marine Planning Webapps icon from the public webapp URL and add a
+  regression test for Signal K icon discovery.
+
 ## 0.5.13 - 2026-08-19
 
 - Add a suite-style Marine Planning icon and package-root 120-pixel PNG for the
