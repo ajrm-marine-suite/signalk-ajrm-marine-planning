@@ -21,7 +21,7 @@
 
       <nav class="tabs" aria-label="Planner tabs">
         <button class="tabButton active" type="button" data-tab="planner" title="Main anchoring planner: enter conditions, choose a tide view, and see rode, clearance, catenary, and anchor holding checks.">Planner</button>
-        <button class="tabButton" type="button" data-tab="tide" title="Select a Location Editor tidal port and inspect its tide rise, spring percentage, keel clearance, and tide curve.">Tide</button>
+        <button class="tabButton" type="button" data-tab="tide" title="Select a Tidal Database port and inspect its tide rise, spring percentage, keel clearance, and tide curve.">Tide</button>
         <button class="tabButton" type="button" data-tab="tideData" title="Fetch and inspect downloaded tide events for the selected standard port from the configured tide API.">Tide Data</button>
         <button class="tabButton" type="button" data-tab="settings" title="Boat constants, ground tackle, echo-sounder mode, time display, and save/reset controls.">Settings</button>
         <button class="tabButton" type="button" data-tab="force" title="Wind force lookup table and curve using the current boat windage settings.">Wind Force</button>
@@ -124,12 +124,12 @@
         <div class="panelHeader">
           <div>
             <h2>Tide</h2>
-            <p>Select a standard or secondary tidal port maintained in AJRM Marine Location Editor. The planner uses its resolved predictions directly.</p>
+            <p>Select a standard or secondary tidal port maintained in AJRM Marine Tidal Database. The planner uses its resolved predictions directly.</p>
           </div>
         </div>
         <section class="inputPanel settingsPanel" aria-label="Tide settings">
           <div class="depthSourcePanel tideSourcePanel" aria-label="Tide source">
-            <label title="Standard and secondary prediction ports supplied by AJRM Marine Location Editor.">Tidal port
+            <label title="Standard and secondary prediction ports supplied by AJRM Marine Tidal Database.">Tidal port
               <select id="tidePortSelect">
                 <option value="">Select a tidal port</option>
               </select>
@@ -141,7 +141,7 @@
             <div class="panelHeader">
               <div>
                 <h3>Selected port prediction</h3>
-                <p>Resolved centrally by Location Editor; secondary-port corrections are already included.</p>
+                <p>Resolved centrally by Tidal Database; secondary-port corrections are already included.</p>
               </div>
             </div>
             <section class="tideSummary compactSummary" aria-live="polite">
@@ -185,7 +185,7 @@
         </div>
         <section class="tideSummary compactSummary" aria-label="Tide data status">
           <div title="Configured standard-port tide station used for downloads."><span>Station</span><strong id="tideDataStationLabel">-</strong></div>
-          <div title="Whether Location Editor's shared UKHO provider is configured."><span>Shared UKHO</span><strong id="tideDataKeyLabel">-</strong></div>
+          <div title="Whether Tidal Database's UKHO provider is configured."><span>Shared UKHO</span><strong id="tideDataKeyLabel">-</strong></div>
           <div title="When the local server last fetched or cached tide data."><span>Fetched</span><strong id="tideDataFetchedLabel">-</strong></div>
           <div title="Number of downloaded high-water and low-water events currently available."><span>Events</span><strong id="tideDataCountLabel">-</strong></div>
           <div title="Whether the displayed tide data is fresh, cached, stale, or unavailable."><span>Status</span><strong id="tideDataStatusLabel">-</strong></div>
@@ -280,7 +280,7 @@
             <label title="Standard port name used for downloaded tide events.">Station name
               <input id="tideDataStationName" type="text" value="" disabled>
             </label>
-            <label title="The prediction station is selected by AJRM Marine Location Editor.">UKHO station ID (Location Editor)
+            <label title="The prediction station is selected by AJRM Marine Tidal Database.">UKHO station ID (Tidal Database)
               <input id="tideDataStationId" type="text" value="" inputmode="numeric" disabled>
             </label>
             <label title="Time standard reported by UKHO. The app treats downloaded tide events as UT.">Time standard
@@ -293,7 +293,7 @@
               </select>
             </label>
           </div>
-          <p class="mutedText">Tidal stations, provider credentials and cached predictions are managed centrally in Location Editor. The display-time choice is saved when changed.</p>
+          <p class="mutedText">Tidal stations, provider credentials and cached predictions are managed centrally in Tidal Database. The display-time choice is saved when changed.</p>
         </section>
         <section class="inputPanel settingsPanel settingsActionsPanel" aria-label="Settings actions">
           <h3>Settings actions</h3>

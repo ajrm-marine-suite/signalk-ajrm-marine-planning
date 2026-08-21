@@ -1,4 +1,4 @@
-/** Verifies Anchor Force exposes only authoritative Location Editor tide inputs. */
+/** Verifies Anchor Force exposes only authoritative Tidal Database inputs. */
 
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -10,10 +10,10 @@ const script = fs.readFileSync(path.join(__dirname, "../public/anchor/app.js"), 
 const gateHtml = fs.readFileSync(path.join(__dirname, "../public/gate/index.html"), "utf8");
 const gateScript = fs.readFileSync(path.join(__dirname, "../public/gate/app.js"), "utf8");
 const suiteHtml = fs.readFileSync(path.join(__dirname, "../public/index.html"), "utf8");
-const adapter = fs.readFileSync(path.join(__dirname, "../plugin/secondary-ports.cjs"), "utf8");
+const backend = fs.readFileSync(path.join(__dirname, "../plugin/index.cjs"), "utf8");
 const sharedTideCurve = fs.readFileSync(path.join(__dirname, "../public/shared/tide-curve.mjs"), "utf8");
 
-test("anchor tide UI selects Location Editor ports without entered HW/LW fields", () => {
+test("anchor tide UI selects Tidal Database ports without entered HW/LW fields", () => {
 	assert.match(html, /id="tidePortSelect"/);
 	assert.match(html, /id="recommendSecondaryPort"/);
 	assert.doesNotMatch(html, /id="(?:hwTime|lwTime|hwHeight|lwHeight)"/);
@@ -52,8 +52,8 @@ test("planning webapps publish one cache-busted release and no retired standalon
 	assert.doesNotMatch(gateScript, /Cuan Sound/);
 });
 
-test("Location Editor is the sole owner of current planning location contracts", () => {
-	assert.match(adapter, /ajrm-secondary-port-corrections-v4/);
-	assert.doesNotMatch(adapter, /ajrm-secondary-port-corrections-v[123]/);
+test("Planning reads tidal contracts without owning correction calculations", () => {
+	assert.match(backend, /ajrmMarineTidalDatabase/);
+	assert.doesNotMatch(backend, /applySecondary|heightDifferencesM/);
 	assert.doesNotMatch(gateScript, /location-constants[^\n]+method:\s*"POST"/);
 });

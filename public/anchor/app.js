@@ -6,7 +6,7 @@ import {
   tideGraphDays
 } from "../shared/tide-curve.mjs";
 
-const webVersion = "0.5.15";
+const webVersion = "0.5.16";
 const halfCycleMinutes = 12 * 60 + 25;
 const tideGraphDaysStorageKey = "anchorForcePlanner.tideGraphDays.v1";
 

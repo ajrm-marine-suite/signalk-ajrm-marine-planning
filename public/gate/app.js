@@ -1,6 +1,6 @@
 /** Browser-side gate-passage model and UI, backed by shared Signal K services. */
 const $ = (id) => document.getElementById(id);
-const webVersion = "0.5.15";
+const webVersion = "0.5.16";
 
 const selectedColumns = [
   { label: "Local Time (UK)", source: "Local Time", format: "localTimeWithDay" },
@@ -1681,7 +1681,7 @@ async function loadSettings() {
     for (const id of calculationSettingIds) {
       if ($(id)) $(id).value = settings[id] || appSettings[id];
     }
-    $("settingsStatus").textContent = settings.ukhoApiKeySet ? "Shared UKHO service is configured in Location Editor." : "Configure the shared UKHO service in Location Editor.";
+    $("settingsStatus").textContent = settings.ukhoApiKeySet ? "Shared UKHO service is configured in Tidal Database." : "Configure the shared UKHO service in Tidal Database.";
   } catch (error) {
     $("settingsStatus").textContent = `Settings load failed: ${error.message}.`;
   }
@@ -1720,7 +1720,7 @@ async function saveSettings() {
       renderReadOnlyTable("fetchedTideTable", currentFetchedTideRows, fetchedTideColumns);
       rebuildTidesFromLocationConstants();
     }
-    $("settingsStatus").textContent = settings.ukhoApiKeySet ? "Planner settings saved; UKHO remains managed by Location Editor." : "Planner settings saved; configure UKHO in Location Editor.";
+    $("settingsStatus").textContent = settings.ukhoApiKeySet ? "Planner settings saved; UKHO remains managed by Tidal Database." : "Planner settings saved; configure UKHO in Tidal Database.";
   } catch (error) {
     $("settingsStatus").textContent = `Settings save failed: ${error.message}.`;
   }

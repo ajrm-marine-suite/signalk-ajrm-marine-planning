@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.16
+
+- Consume prediction ports, corrections, gate constants and cached events from AJRM Marine Tidal Database.
+- Keep Location Editor as the read-only source of spatial geometry only.
+
 ## 0.5.15 - 2026-08-19
 
 - Package the Marine Planning icon at both the npm root for App Store metadata

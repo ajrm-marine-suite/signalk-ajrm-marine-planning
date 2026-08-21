@@ -40,7 +40,7 @@
       <section id="planPanel" class="tabPanel active">
         <section class="controls" aria-label="Passage inputs">
           <label>Tidal gate
-            <select id="gate"><option value="">Loading Location Editor…</option></select>
+            <select id="gate"><option value="">Loading tidal gates…</option></select>
           </label>
           <label class="directionReadout">Tide set
             <output id="gateDirections" aria-live="polite">Direction not loaded</output>
@@ -148,7 +148,7 @@
         <div class="panelHeader">
           <div>
             <h2>Tidal Gate Calculations</h2>
-            <p>Calculated tidal gate windows used by the passage plan. This is read-only; edit source constants in Location Editor.</p>
+            <p>Calculated tidal gate windows used by the passage plan. This is read-only; edit source constants in Tidal Database.</p>
           </div>
         </div>
         <section class="tableWrap inputTableWrap" aria-label="Tidal gate calculations">
@@ -224,7 +224,7 @@
           <label><span class="labelText">Base tide station<span class="helpIcon" tabindex="0" aria-label="Reference tide station used for high and low water heights and times. The tidal gate constants then offset from this station to local gate stream timings." title="Reference tide station used for high and low water heights and times. The tidal gate constants then offset from this station to local gate stream timings.">?</span></span>
             <input id="baseTideStationName" type="text" value="" disabled>
           </label>
-          <label><span class="labelText">UKHO station ID<span class="helpIcon" tabindex="0" aria-label="UKHO station number for the base tide station. supplied by the selected gate standard-port record in Location Editor." title="UKHO station number for the base tide station. supplied by the selected gate standard-port record in Location Editor.">?</span></span>
+          <label><span class="labelText">UKHO station ID<span class="helpIcon" tabindex="0" aria-label="UKHO station number supplied by the selected Tidal Database port definition." title="UKHO station number supplied by the selected Tidal Database port definition.">?</span></span>
             <input id="baseTideStationId" type="text" value="" inputmode="numeric" disabled>
           </label>
           <label><span class="labelText">Tide time standard<span class="helpIcon" tabindex="0" aria-label="Time zone standard reported by the tide source. UKHO tidal event times here are treated as UT, and screen headings say UT or BST where relevant." title="Time zone standard reported by the tide source. UKHO tidal event times here are treated as UT, and screen headings say UT or BST where relevant.">?</span></span>
@@ -361,10 +361,10 @@
         <div class="panelHeader">
           <div>
             <h2>Tidal-gate data</h2>
-            <p>Read-only passage constants maintained in AJRM Marine Location Editor.</p>
+            <p>Read-only passage constants maintained in AJRM Marine Tidal Database.</p>
           </div>
         </div>
-        <p id="locationConstantsStatus" class="dataStatus">Loading shared Location Editor data…</p>
+        <p id="locationConstantsStatus" class="dataStatus">Loading Tidal Database constants…</p>
         <section class="tableWrap inputTableWrap" aria-label="Read-only tidal-gate constants">
           <table id="locationTable">
             <thead></thead>

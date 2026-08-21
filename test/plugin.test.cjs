@@ -1,4 +1,4 @@
-/** Verifies Planning delegates external data to the shared Location Editor services. */
+/** Verifies Planning delegates spatial, tidal and weather data to their separate shared services. */
 
 const assert = require("node:assert/strict");
 const fs = require("node:fs/promises");
@@ -18,12 +18,7 @@ async function fixture(t) {
 	const gate = {
 		id: "0b9ecfef-3260-4f1e-a41f-5f2fdf7dfbec", name: "Cuan Sound", types: ["tidalGate"],
 		feature: { geometry: { type: "Point", coordinates: [-5.637656, 56.27224] } },
-		properties: { tidalGate: {
-			contract: "ajrm-tidal-gate-constants-v1", standardPortRef: "/resources/locations/oban",
-			floodSet: "W", ebbSet: "E", springPeakFlowKnots: 7, neapPeakFlowKnots: 5,
-			floodSpringAfter: "4:30:00", floodNeapAfter: "5:15:00", floodSpringSlack: "0:15:00", floodNeapSlack: "0:40:00",
-			ebbSpringAfter: "-1:45:00", ebbNeapAfter: "-1:00:00", ebbSpringSlack: "0:15:00", ebbNeapSlack: "0:40:00", source: "fixture",
-		} },
+		properties: {},
 	};
 	const oban = { id: "oban", name: "Oban", types: ["tidalStandardPort"], properties: { tide: {
 		providerId: "ukhoTidalEvents", stationId: "0372", stationName: "Oban",
@@ -67,9 +62,14 @@ async function fixture(t) {
 		getDataDirPath: () => directory, setPluginStatus() {}, handleMessage() {},
 		getSelfPath(pathName) { return selfValues[pathName] ?? null; },
 		ajrmMarineLocations: { contract: "ajrm-marine-locations-service-v1", async list() { return [gate, oban, secondaryPort, tidalRegion]; } },
-		ajrmMarineTides: {
-			contract: "ajrm-marine-tides-service-v1",
+		ajrmMarineTidalDatabase: {
+			contract: "ajrm-marine-tidal-database-service-v1",
 			configured: true,
+			listPorts() { return [
+				{ locationId:"oban", name:"Oban", kind:"standard", referenceLevels:{ mhws:4,mhwn:2.9,mlwn:1.8,mlws:.7 }, prediction:{ mode:"provider",providerId:"ukhoTidalEvents",stationId:"0372",stationName:"Oban" } },
+				{ locationId:"tobermory-location", name:"Tobermory", kind:"secondary", prediction:{ mode:"corrections",parentLocationId:"oban",corrections:{} } },
+			]; },
+			listGates() { return [{ locationId:gate.id, contract:"ajrm-tidal-gate-constants-v1", standardPortRef:"/resources/locations/oban", floodSet:"W",ebbSet:"E",springPeakFlowKnots:7,neapPeakFlowKnots:5,floodSpringAfter:"4:30:00",floodNeapAfter:"5:15:00",floodSpringSlack:"0:15:00",floodNeapSlack:"0:40:00",ebbSpringAfter:"-1:45:00",ebbNeapAfter:"-1:00:00",ebbSpringSlack:"0:15:00",ebbNeapSlack:"0:40:00",source:"fixture" }]; },
 			async status(value) { calls.tide.push(value); return { ...tideResult, selectedPort: { id: value.portId, name: "Tobermory" } }; },
 			async refresh(value) { calls.tide.push(value); return { ...tideResult, selectedPort: { id: value.portId, name: "Tobermory" } }; },
 			async recommendSecondary() { return { port: secondaryPort, tidalRegion, distanceM: 850, reason: "nearestSecondaryPortInTidalRegion" }; },
@@ -108,9 +108,9 @@ test("gate weather and tides use shared services and authoritative location", as
 	plugin.stop();
 });
 
-test("gate weather and tides resolve Location Editor services registered by another plugin app wrapper", async (t) => {
+test("gate weather and tides resolve shared services registered by another plugin app wrapper", async (t) => {
 	const { app, calls, call, plugin } = await fixture(t);
-	const names = ["ajrmMarineLocations", "ajrmMarineTides", "ajrmMarineWeather"];
+	const names = ["ajrmMarineLocations", "ajrmMarineTidalDatabase", "ajrmMarineWeather"];
 	for (const name of names) {
 		const registry = Symbol.for(`mcdonaldajr.${name}`);
 		globalThis[registry] = app[name];
@@ -148,7 +148,7 @@ test("anchor state contains no API secret and uses shared tide events", async (t
 	let result = await call("GET", "/anchor/state");
 	assert.deepEqual(result.body.tideData.events, []);
 	result = await call("PUT", "/anchor/tide-port", { body: { selectedPortId: "tobermory-location" } });
-	assert.equal(result.body.tideData.managedBy, "AJRM Marine Location Editor");
+	assert.equal(result.body.tideData.managedBy, "AJRM Marine Tidal Database");
 	assert.equal(result.body.tideData.events[0].Height, 3.2);
 	assert.equal(result.body.tideData.events[0].DateTime, "2026-08-18T12:00:00.000Z");
 	assert.deepEqual(result.body.tidePorts.map((port) => port.id), ["oban", "tobermory-location"]);
@@ -183,7 +183,7 @@ test("anchor live inputs unwrap Signal K leaves and use the current drift path",
 test("anchor clears tide figures when the selected port cannot resolve", async (t) => {
 	const { app, call, plugin } = await fixture(t);
 	await call("PUT", "/anchor/tide-port", { body: { selectedPortId: "tobermory-location" } });
-	app.ajrmMarineTides.status = async ({ portId }) => ({
+	app.ajrmMarineTidalDatabase.status = async ({ portId }) => ({
 		valid: false,
 		selectedPort: { id: portId, name: "Tobermory" },
 		error: "No prediction data are available.",
@@ -195,7 +195,7 @@ test("anchor clears tide figures when the selected port cannot resolve", async (
 	plugin.stop();
 });
 
-test("anchor state always derives tide ports from Location Editor", async (t) => {
+test("anchor state always derives tide ports from Tidal Database", async (t) => {
 	const { call, plugin } = await fixture(t);
 	const result = await call("GET", "/anchor/state");
 	assert.equal(result.statusCode, 200);
