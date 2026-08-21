@@ -15,7 +15,7 @@ const STATUS_PATH = "plugins.ajrmMarinePlanning";
 const SERVICE_REGISTRIES = Object.freeze({
 	ajrmMarineLocations: Symbol.for("mcdonaldajr.ajrmMarineLocations"),
 	ajrmMarineTidalDatabase: Symbol.for("mcdonaldajr.ajrmMarineTidalDatabase"),
-	ajrmMarineWeather: Symbol.for("mcdonaldajr.ajrmMarineWeather"),
+	ajrmMarineWeatherDatabase: Symbol.for("mcdonaldajr.ajrmMarineWeatherDatabase"),
 });
 const PLANNING_DIAGNOSTICS_REGISTRY = Symbol.for("mcdonaldajr.ajrmMarinePlanningDiagnostics");
 
@@ -67,7 +67,7 @@ function normalizeName(value) {
 		.toLowerCase().replace(/\bgulf of\b/g, "").replace(/[^a-z0-9]+/g, " ").trim();
 }
 
-function cacheShape(result) {
+function cacheShape(result, owner = "Tidal Database") {
 	return {
 		hit: result?.source?.cache !== "network",
 		stale: result?.freshness?.state === "stale",
@@ -79,8 +79,8 @@ function cacheShape(result) {
 			? new Date(Date.parse(result.source.fetchedAt) + result.freshness.staleAfterSeconds * 1000).toISOString()
 			: null,
 		policy: result?.freshness
-			? `shared Tidal Database service; ${result.freshness.state}`
-			: "shared Tidal Database service",
+			? `shared ${owner} service; ${result.freshness.state}`
+			: `shared ${owner} service`,
 	};
 }
 
@@ -183,7 +183,7 @@ module.exports = function ajrmMarinePlanning(app) {
 		}));
 		router.get("/gate/weather", async (req, res) => {
 			try {
-				const weather = requireService("ajrmMarineWeather", "weather");
+				const weather = requireService("ajrmMarineWeatherDatabase", "weather database");
 				const location = await gateLocation(req.query?.location);
 				const position = location ? representativePosition(location) : {
 					latitude: Number(req.query?.lat), longitude: Number(req.query?.lon),
@@ -195,7 +195,8 @@ module.exports = function ajrmMarinePlanning(app) {
 				return res.json({
 					latitude: result.position.latitude, longitude: result.position.longitude,
 					weatherDays: Number(req.query?.days || 16), marineDays: Number(req.query?.marineDays || 8),
-					forecast: result.hourly.forecast, marine: result.hourly.marine, cache: cacheShape(result),
+					forecast: result.hourly.forecast, marine: result.hourly.marine, cache: cacheShape(result, "Weather Database"),
+					providers: result.sources || [], selection: result.selection || null,
 				});
 			} catch (error) { return res.status(503).json({ error: error.message }); }
 		});
@@ -296,7 +297,7 @@ module.exports = function ajrmMarinePlanning(app) {
 	function status() {
 		const locations = sharedService("ajrmMarineLocations");
 		const tides = sharedService("ajrmMarineTidalDatabase");
-		const weather = sharedService("ajrmMarineWeather");
+		const weather = sharedService("ajrmMarineWeatherDatabase");
 		return {
 			plugin: plugin.id, version: packageJson.version, enabled: running,
 			locationsService: locations?.contract || null,

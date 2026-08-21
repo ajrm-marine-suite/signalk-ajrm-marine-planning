@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.17 — 2026-08-21
+
+- Consume the standalone Weather Database service and expose its provider provenance and explicit selection policy to Gate Passage.
+- Remove the final dependency on Location Editor's retired weather service.
+
 ## 0.5.16
 
 - Consume prediction ports, corrections, gate constants and cached events from AJRM Marine Tidal Database.

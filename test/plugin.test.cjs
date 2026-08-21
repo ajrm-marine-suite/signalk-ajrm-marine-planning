@@ -74,8 +74,8 @@ async function fixture(t) {
 			async refresh(value) { calls.tide.push(value); return { ...tideResult, selectedPort: { id: value.portId, name: "Tobermory" } }; },
 			async recommendSecondary() { return { port: secondaryPort, tidalRegion, distanceM: 850, reason: "nearestSecondaryPortInTidalRegion" }; },
 		},
-		ajrmMarineWeather: {
-			contract: "ajrm-marine-weather-service-v1",
+		ajrmMarineWeatherDatabase: {
+			contract: "ajrm-marine-weather-database-service-v1",
 			async status(value) { calls.weather.push(value); return weatherResult; },
 			async refresh(value) { calls.weather.push(value); return weatherResult; },
 		},
@@ -110,7 +110,7 @@ test("gate weather and tides use shared services and authoritative location", as
 
 test("gate weather and tides resolve shared services registered by another plugin app wrapper", async (t) => {
 	const { app, calls, call, plugin } = await fixture(t);
-	const names = ["ajrmMarineLocations", "ajrmMarineTidalDatabase", "ajrmMarineWeather"];
+	const names = ["ajrmMarineLocations", "ajrmMarineTidalDatabase", "ajrmMarineWeatherDatabase"];
 	for (const name of names) {
 		const registry = Symbol.for(`mcdonaldajr.${name}`);
 		globalThis[registry] = app[name];
