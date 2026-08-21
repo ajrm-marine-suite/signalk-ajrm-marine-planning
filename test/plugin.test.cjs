@@ -91,7 +91,7 @@ async function fixture(t) {
 		await routes.get(`${method} ${route}`)({ query: {}, body: {}, ...req }, res);
 		return res;
 	}
-	return { app, calls, call, plugin };
+	return { app, calls, call, plugin, directory };
 }
 
 test("gate weather and tides use shared services and authoritative location", async (t) => {
@@ -204,13 +204,55 @@ test("anchor state always derives tide ports from Tidal Database", async (t) => 
 });
 
 test("diagnostic snapshot captures planner state without credentials or duplicating tide events", async (t) => {
-	const { app, plugin } = await fixture(t);
+	const { app, plugin, directory } = await fixture(t);
+	await fs.writeFile(path.join(directory, "anchor-state.json"), JSON.stringify({
+		tide:{ selectedPortId:"" },
+		tideData:{ displayTimeMode:"ut", managedBy:"Retired owner", stationId:"old", ukhoApiKey:"must-not-survive" },
+	}));
 	const snapshot = await app.ajrmMarinePlanningDiagnostics.snapshot();
 	assert.equal(snapshot.contract, "ajrm-marine-planning-diagnostics-v1");
 	assert.equal(snapshot.status.ready, true);
 	assert.ok(snapshot.gate.settings);
 	assert.ok(snapshot.gate.locationConstants["Cuan Sound"]);
 	assert.equal(snapshot.anchor.state.tideData.events, undefined);
+	assert.equal(snapshot.anchor.state.tideData.displayTimeMode, "ut");
+	assert.equal(snapshot.anchor.state.tideData.managedBy, undefined);
+	assert.equal(snapshot.anchor.state.tideData.stationId, undefined);
+	assert.equal(snapshot.anchor.state.tideData.ukhoApiKey, undefined);
 	plugin.stop();
 	assert.equal(app.ajrmMarinePlanningDiagnostics, undefined);
+});
+
+test("published readiness follows shared services that start after Planning", async (t) => {
+	const directory = await fs.mkdtemp(path.join(os.tmpdir(), "ajrm-planning-order-"));
+	t.after(() => fs.rm(directory, { recursive: true, force: true }));
+	const serviceNames = ["ajrmMarineLocations", "ajrmMarineTidalDatabase", "ajrmMarineWeatherDatabase"];
+	const registries = serviceNames.map((name) => Symbol.for(`mcdonaldajr.${name}`));
+	const previous = registries.map((registry) => globalThis[registry]);
+	for (const registry of registries) delete globalThis[registry];
+	t.after(() => registries.forEach((registry, index) => {
+		if (previous[index] === undefined) delete globalThis[registry];
+		else globalThis[registry] = previous[index];
+	}));
+	const published = [];
+	const app = {
+		getDataDirPath: () => directory,
+		setPluginStatus() {},
+		handleMessage(_id, message) {
+			for (const update of message.updates || []) for (const value of update.values || []) {
+				if (value.path === "plugins.ajrmMarinePlanning") published.push(value.value);
+			}
+		},
+	};
+	const plugin = createPlugin(app);
+	plugin.start({});
+	assert.equal(published.at(-1).ready, false);
+	app.ajrmMarineLocations = { contract:"ajrm-marine-locations-service-v1" };
+	app.ajrmMarineTidalDatabase = { contract:"ajrm-marine-tidal-database-service-v1" };
+	app.ajrmMarineWeatherDatabase = { contract:"ajrm-marine-weather-database-service-v1" };
+	await new Promise((resolve) => setTimeout(resolve, 1100));
+	assert.equal(published.at(-1).ready, true);
+	assert.equal(published.at(-1).tideService, "ajrm-marine-tidal-database-service-v1");
+	assert.equal(published.at(-1).weatherService, "ajrm-marine-weather-database-service-v1");
+	plugin.stop();
 });

@@ -1,6 +1,6 @@
 # AJRM Marine Planning
 
-Version `0.5.17` consumes spatial locations, tides and weather from their three standalone suite databases. Weather Database may refresh several providers simultaneously while preserving each source and selecting a primary forecast explicitly.
+Version `0.5.18` keeps its published readiness synchronized when the three standalone suite databases start after Planning. Weather Database may refresh several providers simultaneously while preserving each source and selecting a primary forecast explicitly.
 
 Version `0.5.15` packages the icon at both Signal K consumer locations: the App
 Store package root and installed webapp public URL.

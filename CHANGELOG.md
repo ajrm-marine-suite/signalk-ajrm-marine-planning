@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.18 — 2026-08-21
+
+- Refresh the published shared-service readiness contract when Locations,
+  Tidal Database, or Weather Database starts after Marine Planning.
+- Retain only the user-selected tide display mode in planner state; station,
+  provider, cache and prediction details always come from Tidal Database.
+
 ## 0.5.17 — 2026-08-21
 
 - Consume the standalone Weather Database service and expose its provider provenance and explicit selection policy to Gate Passage.

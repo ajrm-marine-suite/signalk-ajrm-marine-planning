@@ -12,6 +12,7 @@ const packageJson = require("../package.json");
 const defaultGateSettings = require("../defaults/gate-settings.json");
 const defaultAnchorState = require("../defaults/anchor-state.json");
 const STATUS_PATH = "plugins.ajrmMarinePlanning";
+const STATUS_REFRESH_MS = 1000;
 const SERVICE_REGISTRIES = Object.freeze({
 	ajrmMarineLocations: Symbol.for("mcdonaldajr.ajrmMarineLocations"),
 	ajrmMarineTidalDatabase: Symbol.for("mcdonaldajr.ajrmMarineTidalDatabase"),
@@ -126,6 +127,8 @@ function publicAnchorState(state, tideResult, tideConfigured = false) {
 module.exports = function ajrmMarinePlanning(app) {
 	const plugin = {};
 	let running = false;
+	let statusTimer = null;
+	let lastStatusSignature = "";
 	const startedAt = new Date().toISOString();
 	const dataDirectory = app.getDataDirPath?.() || path.join(process.cwd(), ".ajrm-marine-planning");
 	const gateSettingsFile = path.join(dataDirectory, "gate-settings.json");
@@ -144,11 +147,16 @@ module.exports = function ajrmMarinePlanning(app) {
 		});
 		globalThis[PLANNING_DIAGNOSTICS_REGISTRY] = app.ajrmMarinePlanningDiagnostics;
 		app.setPluginStatus?.(`Started v${packageJson.version}`);
-		publishStatus();
+		publishStatus(status(), true);
+		statusTimer = setInterval(publishStatusIfChanged, STATUS_REFRESH_MS);
+		statusTimer.unref?.();
 	};
 
 	plugin.stop = () => {
 		running = false;
+		if (statusTimer) clearInterval(statusTimer);
+		statusTimer = null;
+		lastStatusSignature = "";
 		if (globalThis[PLANNING_DIAGNOSTICS_REGISTRY] === app.ajrmMarinePlanningDiagnostics) {
 			delete globalThis[PLANNING_DIAGNOSTICS_REGISTRY];
 		}
@@ -420,7 +428,11 @@ module.exports = function ajrmMarinePlanning(app) {
 			...clone(defaultAnchorState), ...saved,
 			tide: { ...clone(defaultAnchorState.tide), ...(saved.tide || {}) },
 			tidePorts: await sharedTideLocations(),
-			tideData: { ...clone(defaultAnchorState.tideData || {}), ...(saved.tideData || {}) },
+			tideData: {
+				displayTimeMode:saved.tideData?.displayTimeMode === "ut" ? "ut" : "local",
+				events:[],
+				cache:null,
+			},
 		};
 	}
 
@@ -428,8 +440,11 @@ module.exports = function ajrmMarinePlanning(app) {
 		const value = clone(state);
 		delete value.tidePorts;
 		delete value.deletedSecondaryPortIds;
-		value.tideData = { ...(value.tideData || {}), events: [], cache: null };
-		delete value.tideData.ukhoApiKeySet;
+		value.tideData = {
+			displayTimeMode:value.tideData?.displayTimeMode === "ut" ? "ut" : "local",
+			events:[],
+			cache:null,
+		};
 		await writeJson(anchorStateFile, value);
 	}
 
@@ -474,11 +489,25 @@ module.exports = function ajrmMarinePlanning(app) {
 		};
 	}
 
-	function publishStatus(value = status()) {
+	function publishStatus(value = status(), force = false) {
+		const signature = value === null ? "null" : JSON.stringify({
+			enabled:value.enabled,
+			locationsService:value.locationsService,
+			tideService:value.tideService,
+			weatherService:value.weatherService,
+			ready:value.ready,
+		});
+		if (!force && signature === lastStatusSignature) return;
+		lastStatusSignature = signature;
 		app.handleMessage?.(plugin.id, { context: "vessels.self", updates: [{
 			source: { label: plugin.id }, timestamp: new Date().toISOString(),
 			values: [{ path: STATUS_PATH, value }],
 		}] });
+	}
+
+	function publishStatusIfChanged() {
+		if (!running) return;
+		publishStatus(status());
 	}
 
 	return plugin;
