@@ -1,12 +1,8 @@
 {
-  "selectedGate": "",
+  "selectedGateLocationId": "",
   "selectedHeading": "270",
   "selectedCrewCapability": "competent",
   "speed": "5",
-  "fallbackCycleHours": "12.5",
-  "fallbackEbbHours": "6.2",
-  "peakEbbOffsetMinutes": "180",
-  "peakFlowMinimumKn": "0.5",
   "knotsToMs": "0.5144",
   "gravityMs2": "9.81",
   "displacementReferenceKg": "5604",

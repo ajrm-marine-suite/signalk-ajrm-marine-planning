@@ -1,5 +1,11 @@
 # AJRM Marine Planning
 
+Version `0.5.20` consumes the fail-closed `ajrm-tidal-gate-constants-v2`
+contract from AJRM Marine Tidal Database `0.1.9` or later. Gate Passage now
+selects gates by stable Location ID, honours an explicit HW or LW reference,
+keeps independently named turn directions, and calculates only records present
+in Tidal Database's effective operational allow-list.
+
 Version `0.5.19` carries Tidal Database capability and caution metadata into Anchor Force. Direct provider preference is consistent with Display, and incomplete stations cannot generate a misleading complete curve.
 
 Version `0.5.18` keeps its published readiness synchronized when the three standalone suite databases start after Planning. Weather Database may refresh several providers simultaneously while preserving each source and selecting a primary forecast explicitly.
@@ -53,3 +59,30 @@ low-water clearance. The skipper remains responsible for every decision.
 Planning contains no writable location catalogue, provider credentials or
 private tide/weather cache. Correct spatial records in Location Editor,
 prediction/correction records in Tidal Database and provider settings in Weather Database, then reload Planning.
+
+## Tidal-gate v2 calculation boundary
+
+Gate Passage uses Tidal Database's joined v2 catalogue. Location Editor remains
+the owner of stable gate IDs, names and geometry; Tidal Database owns timing,
+rate, provenance, review and readiness. Planning exposes no gate mutation API.
+
+Operational calculation currently requires:
+
+- a reviewed native v2 record with no blocking caution, hazard or uncertainty;
+- a usable reference port and an explicit `HW` or `LW` event;
+- known spring and neap offsets and unambiguous slack semantics for each named
+  turn;
+- true current-towards bearings; and
+- exactly one `exact`, gate-local, turn-specific spring and neap phase-peak rate.
+
+The supported model interpolates only inside the declared neap-to-spring
+reference range and creates sine phases only between real consecutive turn
+instances. It does not clamp, extrapolate, repeat a fallback cycle, invent a
+final phase, copy a missing regime, replace missing slack with zero, or impose a
+minimum stream rate. Approximate, range, up-to, more-than and named-locality rate
+observations remain visible but are display-only in this release.
+
+Existing v1 definitions are preserved and visible as `needs-review`; none is
+silently promoted to operational v2. A saved display-name selection is migrated
+only when it has one exact Location Editor match. Ambiguous or missing names stay
+unselected until the user chooses a stable ID.

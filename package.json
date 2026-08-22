@@ -1,6 +1,6 @@
 {
   "name": "signalk-ajrm-marine-planning",
-  "version": "0.5.19",
+  "version": "0.5.20",
   "description": "Consolidated Signal K gate-passage and anchor-force planning using shared locations, tides and weather.",
   "keywords": [
     "signalk-node-server-plugin",
@@ -19,7 +19,7 @@
   },
   "scripts": {
     "sync:shared-ui": "node scripts/sync-shared-ui.mjs",
-    "test": "npm run sync:shared-ui && node --check plugin/index.cjs && node --check public/suite.js && node --check public/gate/app.js && node --check public/anchor/app.js && node --test test/*.test.cjs"
+    "test": "npm run sync:shared-ui && node --check plugin/index.cjs && node --check public/suite.js && node --check public/gate/app.js && node --check public/gate/gate-contract.mjs && node --check public/gate/gate-calculator.mjs && node --check public/anchor/app.js && node --test test/*.test.cjs"
   },
   "signalk-plugin-enabled-by-default": true,
   "signalk": {

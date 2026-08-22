@@ -11,6 +11,49 @@ function response() {
 	return { statusCode: 200, status(code) { this.statusCode = code; return this; }, json(body) { this.body = body; return this; } };
 }
 
+function known(value) { return { state: "known", value }; }
+
+function operationalGateRecord(locationId, referenceEvent = "HW") {
+	const turns = [
+		{
+			id: "west-going", name: "West-going stream begins",
+			direction: { label: "West-going", bearingDegreesTrue: known(270) },
+			offsets: { unit: "minutes", spring: known(-105), neap: known(-60) },
+			slack: { unit: "minutes", spring: { semantics: "none" }, neap: { semantics: "none" } },
+		},
+		{
+			id: "east-going", name: "East-going stream begins",
+			direction: { label: "East-going", bearingDegreesTrue: known(90) },
+			offsets: { unit: "minutes", spring: known(270), neap: known(315) },
+			slack: { unit: "minutes", spring: { semantics: "none" }, neap: { semantics: "none" } },
+		},
+	];
+	return {
+		contract: "ajrm-tidal-gate-constants-v2", contractVersion: 2, locationId,
+		reference: { portLocationId: "oban", event: referenceEvent },
+		flowModel: { kind: "sinusoidal-between-turns-v1", peakTiming: "midpoint-between-turns", zeroAtTurns: true },
+		regimeInterpolation: {
+			kind: "linear-reference-range-v1", rangePairing: "preceding-opposite-event", outOfRange: "unavailable",
+		},
+		turns,
+		rateObservations: turns.flatMap((turn, turnIndex) => ["spring", "neap"].map((regime, regimeIndex) => {
+			const value = 7 - turnIndex - regimeIndex;
+			return {
+				id: `${turn.id}-${regime}`,
+				kind: "phase-peak",
+				turnId: turn.id,
+				regime,
+				locality: { scope: "gate", locationId },
+				unit: "kn",
+				qualifier: "exact",
+				reportedValue: known(value), lowerBound: known(value), upperBound: known(value),
+			};
+		})),
+		provenance: { sources: [] }, review: { state: "reviewed" },
+		cautions: [], hazards: [], uncertainty: [], readiness: { state: "operational", reasons: [] },
+	};
+}
+
 async function fixture(t) {
 	const directory = await fs.mkdtemp(path.join(os.tmpdir(), "ajrm-planning-"));
 	t.after(() => fs.rm(directory, { recursive: true, force: true }));
@@ -50,6 +93,11 @@ async function fixture(t) {
 		freshness: { state: "fresh", staleAfterSeconds: 3600 }, error: "",
 	};
 	const tidalRegion = { id: "west-region", name: "West Scotland", types: ["tidalRegion"] };
+	const gateDefinition = operationalGateRecord(gate.id);
+	let gateCatalogue = {
+		contract: "ajrm-tidal-gate-catalogue-v2", contractVersion: 2,
+		gates: [gateDefinition], operationalLocationIds: [gate.id], diagnostics: [],
+	};
 	const selfValues = {
 		"navigation.position": { value: { latitude: 56.62, longitude: -6.05 }, timestamp: "2026-08-18T12:00:00.000Z" },
 		"environment.wind.speedApparent": { value: 7.5, timestamp: "2026-08-18T12:00:00.000Z" },
@@ -65,11 +113,12 @@ async function fixture(t) {
 		ajrmMarineTidalDatabase: {
 			contract: "ajrm-marine-tidal-database-service-v1",
 			configured: true,
+			async getGateCatalogue() { return gateCatalogue; },
 			listPorts() { return [
 				{ locationId:"oban", name:"Oban", kind:"standard", referenceLevels:{ mhws:4,mhwn:2.9,mlwn:1.8,mlws:.7 }, prediction:{ mode:"provider",providerId:"ukhoTidalEvents",stationId:"0372",stationName:"Oban" } },
 				{ locationId:"tobermory-location", name:"Tobermory", kind:"secondary", prediction:{ mode:"corrections",parentLocationId:"oban",corrections:{} } },
 			]; },
-			listGates() { return [{ locationId:gate.id, contract:"ajrm-tidal-gate-constants-v1", standardPortRef:"/resources/locations/oban", floodSet:"W",ebbSet:"E",springPeakFlowKnots:7,neapPeakFlowKnots:5,floodSpringAfter:"4:30:00",floodNeapAfter:"5:15:00",floodSpringSlack:"0:15:00",floodNeapSlack:"0:40:00",ebbSpringAfter:"-1:45:00",ebbNeapAfter:"-1:00:00",ebbSpringSlack:"0:15:00",ebbNeapSlack:"0:40:00",source:"fixture" }]; },
+			listGates() { return gateCatalogue.gates; },
 			async status(value) { calls.tide.push(value); return { ...tideResult, selectedPort: { id: value.portId, name: "Tobermory" } }; },
 			async refresh(value) { calls.tide.push(value); return { ...tideResult, selectedPort: { id: value.portId, name: "Tobermory" } }; },
 			async recommendSecondary() { return { port: secondaryPort, tidalRegion, distanceM: 850, reason: "nearestSecondaryPortInTidalRegion" }; },
@@ -91,20 +140,68 @@ async function fixture(t) {
 		await routes.get(`${method} ${route}`)({ query: {}, body: {}, ...req }, res);
 		return res;
 	}
-	return { app, calls, call, plugin, directory };
+	return {
+		app, calls, call, plugin, directory, gate, gateDefinition,
+		get gateCatalogue() { return gateCatalogue; },
+		set gateCatalogue(value) { gateCatalogue = value; },
+	};
 }
 
-test("gate weather and tides use shared services and authoritative location", async (t) => {
-	const { calls, call, plugin } = await fixture(t);
-	let result = await call("GET", "/gate/weather", { query: { location: "Cuan Sound", days: "4", marineDays: "3" } });
+test("gate catalogue joins v2 records to Location names and exposes the effective allow-list", async (t) => {
+	const { call, gate, gateDefinition, plugin } = await fixture(t);
+	const result = await call("GET", "/gate/location-constants");
 	assert.equal(result.statusCode, 200);
-	assert.equal(calls.weather[0].contextLocationId, "0b9ecfef-3260-4f1e-a41f-5f2fdf7dfbec");
-	result = await call("GET", "/gate/tides", { query: { location: "Cuan Sound" } });
+	assert.equal(result.body.contract, "ajrm-marine-planning-gate-catalogue-v2");
+	assert.equal(result.body.contractVersion, 2);
+	assert.deepEqual(result.body.operationalLocationIds, [gate.id]);
+	assert.equal(result.body.gates.length, 1);
+	assert.equal(result.body.gates[0].locationId, gate.id);
+	assert.equal(result.body.gates[0].name, "Cuan Sound");
+	assert.equal(result.body.gates[0].record.locationId, gateDefinition.locationId);
+	assert.equal(result.body.gates[0].record.name, undefined);
+	assert.equal(result.body.gates[0].referencePort.locationId, "oban");
+	assert.equal(result.body.gates[0].referencePort.name, "Oban");
+	assert.equal(result.body.gates[0].calculationReady, true);
+	plugin.stop();
+});
+
+test("gate weather and tides use stable location IDs and authoritative geometry", async (t) => {
+	const { calls, call, gate, plugin } = await fixture(t);
+	let result = await call("GET", "/gate/weather", { query: { locationId: gate.id, days: "4", marineDays: "3" } });
+	assert.equal(result.statusCode, 200);
+	assert.equal(result.body.locationId, gate.id);
+	assert.equal(result.body.gateSelection.mode, "locationId");
+	assert.equal(calls.weather[0].contextLocationId, gate.id);
+	result = await call("GET", "/gate/tides", { query: { locationId: gate.id } });
 	assert.equal(result.body.events[0].EventType, "HighWater");
 	assert.equal(result.body.events[0].DateTime, "2026-08-18T12:00:00.000Z");
+	assert.equal(result.body.referenceEvent, "HW");
+	assert.deepEqual(result.body.reference, { portLocationId: "oban", event: "HW" });
 	assert.equal(calls.tide[0].includeEvents, true);
 	assert.equal(calls.tide[0].portId, "oban");
-	assert.equal(calls.tide[0].contextLocationId, "0b9ecfef-3260-4f1e-a41f-5f2fdf7dfbec");
+	assert.equal(calls.tide[0].contextLocationId, gate.id);
+	plugin.stop();
+});
+
+test("gate routes retain only an exact unique legacy-name fallback", async (t) => {
+	const { app, call, gate, plugin } = await fixture(t);
+	let result = await call("GET", "/gate/weather", { query: { location: "Cuan Sound" } });
+	assert.equal(result.statusCode, 200);
+	assert.equal(result.body.gateSelection.mode, "legacy-exact-name");
+	assert.equal(result.body.gateSelection.locationId, gate.id);
+	result = await call("GET", "/gate/weather", { query: { location: "cuan sound" } });
+	assert.equal(result.statusCode, 404);
+	result = await call("GET", "/gate/weather", { query: { locationId: "missing", location: "Cuan Sound" } });
+	assert.equal(result.statusCode, 404);
+	result = await call("GET", "/gate/weather", { query: { lat: "56.2", lon: "-5.6" } });
+	assert.equal(result.statusCode, 400);
+	const originalList = app.ajrmMarineLocations.list;
+	app.ajrmMarineLocations.list = async (...args) => [
+		...(await originalList(...args)),
+		{ ...gate, id: "duplicate-gate" },
+	];
+	result = await call("GET", "/gate/weather", { query: { location: "Cuan Sound" } });
+	assert.equal(result.statusCode, 409);
 	plugin.stop();
 });
 
@@ -117,29 +214,155 @@ test("gate weather and tides resolve shared services registered by another plugi
 		delete app[name];
 		t.after(() => { delete globalThis[registry]; });
 	}
-	let result = await call("GET", "/gate/weather", { query: { location: "Cuan Sound" } });
+	let result = await call("GET", "/gate/weather", { query: { locationId: "0b9ecfef-3260-4f1e-a41f-5f2fdf7dfbec" } });
 	assert.equal(result.statusCode, 200);
-	result = await call("GET", "/gate/tides", { query: { location: "Cuan Sound" } });
+	result = await call("GET", "/gate/tides", { query: { locationId: "0b9ecfef-3260-4f1e-a41f-5f2fdf7dfbec" } });
 	assert.equal(result.statusCode, 200);
 	assert.equal(calls.weather.length, 1);
 	assert.equal(calls.tide.length, 1);
 	plugin.stop();
 });
 
-test("gate settings reject retired provider and location fields", async (t) => {
-	const { call, plugin } = await fixture(t);
+test("gate settings persist stable IDs and reject retired provider, name and location fields", async (t) => {
+	const { call, gate, plugin } = await fixture(t);
 	let result = await call("POST", "/gate/settings", { body: {
 		selectedGate: "Cuan Sound",
+		selectedGateLocationId: gate.id,
 		ukhoApiKey: "must-not-persist",
 		baseTideStationName: "Wrong owner",
 	} });
 	assert.equal(result.statusCode, 200);
-	assert.equal(result.body.selectedGate, "Cuan Sound");
+	assert.equal(result.body.selectedGate, undefined);
+	assert.equal(result.body.selectedGateLocationId, gate.id);
 	assert.equal(result.body.ukhoApiKey, undefined);
 	assert.equal(result.body.baseTideStationName, undefined);
 	result = await call("GET", "/gate/settings");
+	assert.equal(result.body.selectedGateLocationId, gate.id);
 	assert.equal(result.body.ukhoApiKey, undefined);
 	assert.equal(result.body.baseTideStationName, undefined);
+	assert.equal(result.body.fallbackCycleHours, undefined);
+	result = await call("POST", "/gate/settings", { body: { selectedGateLocationId: "missing-location" } });
+	assert.equal(result.statusCode, 400);
+	plugin.stop();
+});
+
+test("gate tides honour an operational v2 low-water reference", async (t) => {
+	const setup = await fixture(t);
+	const lowWaterGate = operationalGateRecord(setup.gate.id, "LW");
+	setup.gateCatalogue = {
+		...setup.gateCatalogue,
+		gates: [lowWaterGate],
+		operationalLocationIds: [setup.gate.id],
+	};
+	setup.app.ajrmMarineTidalDatabase.status = async (request) => {
+		setup.calls.tide.push(request);
+		return {
+			valid: true, station: { id: "0372", name: "Oban" },
+			events: [{ type: "low", at: "2026-08-18T18:00:00.000Z", heightM: 0.8 }],
+			source: { cache: "hit", fetchedAt: "2026-08-18T00:00:00.000Z" },
+			freshness: { state: "fresh", staleAfterSeconds: 3600 },
+		};
+	};
+	const result = await setup.call("GET", "/gate/tides", { query: { locationId: setup.gate.id } });
+	assert.equal(result.statusCode, 200);
+	assert.equal(result.body.referenceEvent, "LW");
+	assert.equal(result.body.events[0].EventType, "LowWater");
+	assert.equal(setup.calls.tide[0].portId, "oban");
+	setup.plugin.stop();
+});
+
+test("gate tides reject records outside the effective operational allow-list", async (t) => {
+	const setup = await fixture(t);
+	setup.gateCatalogue = { ...setup.gateCatalogue, operationalLocationIds: [] };
+	let result = await setup.call("GET", "/gate/location-constants");
+	assert.deepEqual(result.body.operationalLocationIds, []);
+	assert.equal(result.body.gates[0].calculationReady, false);
+	assert.ok(result.body.diagnostics.planning[0].reasonCodes.includes("not-in-tidal-database-operational-allow-list"));
+	result = await setup.call("GET", "/gate/tides", { query: { locationId: setup.gate.id } });
+	assert.equal(result.statusCode, 409);
+	assert.equal(setup.calls.tide.length, 0);
+	setup.plugin.stop();
+});
+
+test("Planning defensively rejects unsupported interpolation and non-exact phase rates", async (t) => {
+	const setup = await fixture(t);
+	const unsafe = structuredClone(setup.gateDefinition);
+	unsafe.regimeInterpolation.outOfRange = "clamp";
+	unsafe.rateObservations[0].qualifier = "approximate";
+	setup.gateCatalogue = { ...setup.gateCatalogue, gates: [unsafe] };
+	const result = await setup.call("GET", "/gate/tides", { query: { locationId: setup.gate.id } });
+	assert.equal(result.statusCode, 409);
+	assert.ok(result.body.reasonCodes.includes("unsupported-regime-interpolation"));
+	assert.ok(result.body.reasonCodes.includes("incomplete-phase-peak-rates"));
+	assert.equal(setup.calls.tide.length, 0);
+	setup.plugin.stop();
+});
+
+test("Planning rejects a gate whose reference port cannot join by location ID", async (t) => {
+	const setup = await fixture(t);
+	const missingReference = structuredClone(setup.gateDefinition);
+	missingReference.reference.portLocationId = "missing-port";
+	setup.gateCatalogue = { ...setup.gateCatalogue, gates: [missingReference] };
+	let result = await setup.call("GET", "/gate/location-constants");
+	assert.equal(result.body.gates[0].referencePort, null);
+	assert.equal(result.body.gates[0].calculationReady, false);
+	assert.ok(result.body.diagnostics.planning[0].reasonCodes.includes("missing-reference-port-join"));
+	result = await setup.call("GET", "/gate/tides", { query: { locationId: setup.gate.id } });
+	assert.equal(result.statusCode, 409);
+	assert.equal(setup.calls.tide.length, 0);
+	setup.plugin.stop();
+});
+
+test("raw v1 records remain visible but display-only when the catalogue API is unavailable", async (t) => {
+	const setup = await fixture(t);
+	const legacy = {
+		contract: "ajrm-tidal-gate-constants-v1", locationId: setup.gate.id,
+		standardPortRef: "/resources/locations/oban", floodSet: "W", ebbSet: "E",
+		springPeakFlowKnots: 7, source: "legacy fixture",
+	};
+	setup.gateCatalogue = { gates: [legacy] };
+	delete setup.app.ajrmMarineTidalDatabase.getGateCatalogue;
+	let result = await setup.call("GET", "/gate/location-constants");
+	assert.equal(result.statusCode, 200);
+	assert.deepEqual(result.body.operationalLocationIds, []);
+	assert.equal(result.body.gates[0].record.contract, "ajrm-tidal-gate-constants-v1");
+	assert.equal(result.body.gates[0].calculationReady, false);
+	assert.equal(result.body.gates[0].compatibility.mode, "raw-v1-display-only");
+	assert.deepEqual(result.body.gates[0].compatibility.original, legacy);
+	result = await setup.call("GET", "/gate/tides", { query: { locationId: setup.gate.id } });
+	assert.equal(result.statusCode, 409);
+	assert.equal(setup.calls.tide.length, 0);
+	setup.plugin.stop();
+});
+
+test("saved exact gate names migrate once to stable IDs without retaining the name", async (t) => {
+	const { call, directory, gate, plugin } = await fixture(t);
+	const file = path.join(directory, "gate-settings.json");
+	await fs.writeFile(file, JSON.stringify({ selectedGate: "Cuan Sound", speed: "6" }));
+	const result = await call("GET", "/gate/settings");
+	assert.equal(result.body.selectedGateLocationId, gate.id);
+	assert.equal(result.body.selectionMigration.status, "migrated");
+	const persisted = JSON.parse(await fs.readFile(file, "utf8"));
+	assert.equal(persisted.selectedGateLocationId, gate.id);
+	assert.equal(persisted.selectedGate, undefined);
+	assert.equal(persisted.speed, "6");
+	plugin.stop();
+});
+
+test("ambiguous saved gate names remain unresolved and are never silently selected", async (t) => {
+	const { app, call, directory, gate, plugin } = await fixture(t);
+	const originalList = app.ajrmMarineLocations.list;
+	app.ajrmMarineLocations.list = async (...args) => [
+		...(await originalList(...args)),
+		{ ...gate, id: "duplicate-gate" },
+	];
+	const file = path.join(directory, "gate-settings.json");
+	await fs.writeFile(file, JSON.stringify({ selectedGate: "Cuan Sound" }));
+	const result = await call("GET", "/gate/settings");
+	assert.equal(result.body.selectedGateLocationId, "");
+	assert.equal(result.body.selectionMigration.status, "ambiguous");
+	const persisted = JSON.parse(await fs.readFile(file, "utf8"));
+	assert.equal(persisted.selectedGate, "Cuan Sound");
 	plugin.stop();
 });
 
@@ -213,7 +436,8 @@ test("diagnostic snapshot captures planner state without credentials or duplicat
 	assert.equal(snapshot.contract, "ajrm-marine-planning-diagnostics-v1");
 	assert.equal(snapshot.status.ready, true);
 	assert.ok(snapshot.gate.settings);
-	assert.ok(snapshot.gate.locationConstants["Cuan Sound"]);
+	assert.equal(snapshot.gate.locationConstants.contract, "ajrm-marine-planning-gate-catalogue-v2");
+	assert.equal(snapshot.gate.locationConstants.gates[0].name, "Cuan Sound");
 	assert.equal(snapshot.anchor.state.tideData.events, undefined);
 	assert.equal(snapshot.anchor.state.tideData.displayTimeMode, "ut");
 	assert.equal(snapshot.anchor.state.tideData.managedBy, undefined);

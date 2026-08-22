@@ -19,6 +19,10 @@ const SERVICE_REGISTRIES = Object.freeze({
 	ajrmMarineWeatherDatabase: Symbol.for("mcdonaldajr.ajrmMarineWeatherDatabase"),
 });
 const PLANNING_DIAGNOSTICS_REGISTRY = Symbol.for("mcdonaldajr.ajrmMarinePlanningDiagnostics");
+const PLANNING_GATE_CATALOGUE_CONTRACT = "ajrm-marine-planning-gate-catalogue-v2";
+const TIDAL_GATE_CATALOGUE_CONTRACT = "ajrm-tidal-gate-catalogue-v2";
+const TIDAL_GATE_CONTRACT_V2 = "ajrm-tidal-gate-constants-v2";
+const TIDAL_GATE_CONTRACT_V1 = "ajrm-tidal-gate-constants-v1";
 
 function clone(value) { return structuredClone(value); }
 
@@ -63,9 +67,94 @@ function representativePosition(location) {
 	};
 }
 
-function normalizeName(value) {
-	return String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-		.toLowerCase().replace(/\bgulf of\b/g, "").replace(/[^a-z0-9]+/g, " ").trim();
+function knownMeasurement(value, { nonNegative = false } = {}) {
+	return value?.state === "known"
+		&& typeof value.value === "number"
+		&& Number.isFinite(value.value)
+		&& (!nonNegative || value.value >= 0);
+}
+
+function completeSlackValue(value) {
+	if (value?.semantics === "none") return true;
+	if (value?.semantics === "total-centered-on-turn") {
+		return knownMeasurement(value.total, { nonNegative: true });
+	}
+	if (value?.semantics === "before-and-after-turn") {
+		return knownMeasurement(value.before, { nonNegative: true })
+			&& knownMeasurement(value.after, { nonNegative: true });
+	}
+	return false;
+}
+
+function completeRateObservation(observation, locationId) {
+	if (observation?.kind !== "phase-peak" || observation?.unit !== "kn") return false;
+	if (observation?.locality?.scope !== "gate" || observation.locality.locationId !== locationId) return false;
+	return observation.qualifier === "exact"
+		&& knownMeasurement(observation.reportedValue, { nonNegative: true })
+		&& knownMeasurement(observation.lowerBound, { nonNegative: true })
+		&& knownMeasurement(observation.upperBound, { nonNegative: true })
+		&& observation.reportedValue.value === observation.lowerBound.value
+		&& observation.reportedValue.value === observation.upperBound.value;
+}
+
+function gateDefinitionReasonCodes({ record, location, referencePort, sourceOperational, duplicate }) {
+	const reasons = [];
+	if (!record) return ["missing-gate-definition"];
+	if (duplicate) reasons.push("duplicate-gate-definition");
+	if (!location) reasons.push("missing-location-join");
+	if (record.contract !== TIDAL_GATE_CONTRACT_V2) {
+		reasons.push(record.contract === TIDAL_GATE_CONTRACT_V1 ? "legacy-v1-display-only" : "unsupported-gate-contract");
+		return reasons;
+	}
+	if (record.contractVersion !== 2) reasons.push("unsupported-gate-contract-version");
+	if (record.readiness?.state !== "operational") reasons.push("gate-not-operational");
+	if (!sourceOperational) reasons.push("not-in-tidal-database-operational-allow-list");
+	if (!record.reference || typeof record.reference.portLocationId !== "string"
+		|| !["HW", "LW"].includes(record.reference.event)) {
+		reasons.push("invalid-reference-event");
+	}
+	if (!referencePort) reasons.push("missing-reference-port-join");
+	if (record.flowModel?.kind !== "sinusoidal-between-turns-v1"
+		|| record.flowModel?.peakTiming !== "midpoint-between-turns"
+		|| record.flowModel?.zeroAtTurns !== true) {
+		reasons.push("unsupported-flow-model");
+	}
+	if (record.regimeInterpolation?.kind !== "linear-reference-range-v1"
+		|| !["preceding-opposite-event", "following-opposite-event", "mean-adjacent-opposite-events"].includes(record.regimeInterpolation?.rangePairing)
+		|| record.regimeInterpolation?.outOfRange !== "unavailable") {
+		reasons.push("unsupported-regime-interpolation");
+	}
+
+	const turns = Array.isArray(record.turns) ? record.turns : [];
+	const turnIds = turns.map((turn) => turn?.id);
+	const turnsComplete = turns.length >= 2
+		&& turnIds.every((id) => typeof id === "string" && id.trim())
+		&& new Set(turnIds).size === turnIds.length
+		&& turns.every((turn) => {
+			const bearing = turn?.direction?.bearingDegreesTrue;
+			return typeof turn.name === "string" && turn.name.trim()
+				&& typeof turn.direction?.label === "string" && turn.direction.label.trim()
+				&& knownMeasurement(bearing)
+				&& bearing.value >= 0 && bearing.value < 360
+				&& turn.offsets?.unit === "minutes"
+				&& knownMeasurement(turn.offsets.spring)
+				&& knownMeasurement(turn.offsets.neap)
+				&& turn.slack?.unit === "minutes"
+				&& completeSlackValue(turn.slack.spring)
+				&& completeSlackValue(turn.slack.neap);
+		});
+	if (!turnsComplete) reasons.push("incomplete-turn-semantics");
+
+	const observations = Array.isArray(record.rateObservations) ? record.rateObservations : [];
+	const ratesComplete = turnsComplete && turns.every((turn) => ["spring", "neap"].every((regime) => {
+		const matches = observations.filter((observation) => observation?.turnId === turn.id
+			&& observation?.regime === regime
+			&& observation?.locality?.scope === "gate"
+			&& observation?.locality?.locationId === record.locationId);
+		return matches.length === 1 && completeRateObservation(matches[0], record.locationId);
+	}));
+	if (!ratesComplete) reasons.push("incomplete-phase-peak-rates");
+	return [...new Set(reasons)];
 }
 
 function cacheShape(result, owner = "Tidal Database") {
@@ -178,31 +267,59 @@ module.exports = function ajrmMarinePlanning(app) {
 		});
 		router.get("/gate/location-constants", async (_req, res) => {
 			try { res.json(await gateConstants()); }
-			catch (error) { res.status(500).json({ error: error.message }); }
+			catch (error) { res.status(503).json({ error: error.message }); }
 		});
 		router.get("/gate/settings", async (_req, res) => {
-			const settings = gateSettings(await readJson(gateSettingsFile, {}));
-			res.json({ ...settings, ukhoApiKeySet: sharedService("ajrmMarineTidalDatabase")?.configured === true, tideManagedBy: "AJRM Marine Tidal Database" });
+			const loaded = await loadGateSettings({ persistMigration: true });
+			res.json({
+				...loaded.settings,
+				selectionMigration: loaded.selectionMigration,
+				ukhoApiKeySet: sharedService("ajrmMarineTidalDatabase")?.configured === true,
+				tideManagedBy: "AJRM Marine Tidal Database",
+			});
 		});
 		router.post("/gate/settings", requireWrite(async (req, res) => {
-			const current = gateSettings(await readJson(gateSettingsFile, {}));
+			const loaded = await loadGateSettings();
+			const current = loaded.settings;
 			const submitted = gateSettings(req.body || {}, false);
+			if (Object.prototype.hasOwnProperty.call(submitted, "selectedGateLocationId")) {
+				submitted.selectedGateLocationId = String(submitted.selectedGateLocationId || "").trim();
+				if (submitted.selectedGateLocationId) {
+					const locations = await sharedGateLocations();
+					if (!locations.some((location) => location.id === submitted.selectedGateLocationId)) {
+						return res.status(400).json({ error: "The selected tidal-gate location ID does not exist in Location Editor." });
+					}
+				}
+			}
 			const next = { ...current, ...submitted };
-			await writeJson(gateSettingsFile, next);
-			res.json({ ok: true, ...defaultGateSettings, ...next, ukhoApiKeySet: sharedService("ajrmMarineTidalDatabase")?.configured === true });
+			const retainedLegacySelection = !next.selectedGateLocationId && loaded.unresolvedLegacyName
+				? { selectedGate: loaded.unresolvedLegacyName }
+				: {};
+			await writeJson(gateSettingsFile, { ...next, ...retainedLegacySelection });
+			res.json({
+				ok: true,
+				...defaultGateSettings,
+				...next,
+				selectionMigration: submitted.selectedGateLocationId ? null : loaded.selectionMigration,
+				ukhoApiKeySet: sharedService("ajrmMarineTidalDatabase")?.configured === true,
+			});
 		}));
 		router.get("/gate/weather", async (req, res) => {
 			try {
 				const weather = requireService("ajrmMarineWeatherDatabase", "weather database");
-				const location = await gateLocation(req.query?.location);
-				const position = location ? representativePosition(location) : {
-					latitude: Number(req.query?.lat), longitude: Number(req.query?.lon),
-				};
+				const resolved = await gateLocation(req.query);
+				if (!resolved.location) return res.status(resolved.statusCode).json({ error: resolved.error });
+				const location = resolved.location;
+				const position = representativePosition(location);
+				if (!Number.isFinite(position?.latitude) || !Number.isFinite(position?.longitude)) {
+					return res.status(409).json({ error: `${location.name} has no usable representative position in Location Editor.` });
+				}
 				const result = req.query?.refresh === "1"
 					? await weather.refresh({ contextLocationId: location?.id, position, weatherDays: req.query?.days, marineDays: req.query?.marineDays })
 					: await weather.status({ contextLocationId: location?.id, position, weatherDays: req.query?.days, marineDays: req.query?.marineDays });
 				if (!result.valid) return res.status(503).json({ error: result.error || "Weather is unavailable." });
 				return res.json({
+					locationId: location.id, locationName: location.name, gateSelection: resolved.selection,
 					latitude: result.position.latitude, longitude: result.position.longitude,
 					weatherDays: Number(req.query?.days || 16), marineDays: Number(req.query?.marineDays || 8),
 					forecast: result.hourly.forecast, marine: result.hourly.marine, cache: cacheShape(result, "Weather Database"),
@@ -213,17 +330,34 @@ module.exports = function ajrmMarinePlanning(app) {
 		router.get("/gate/tides", async (req, res) => {
 			try {
 				const tide = requireService("ajrmMarineTidalDatabase", "tidal database");
-				const location = await gateLocation(req.query?.location);
-				if (!location) return res.status(404).json({ error: "The selected tidal gate was not found in Location Editor." });
-				const gate = requireService("ajrmMarineTidalDatabase", "tidal database").listGates().find((entry) => entry.locationId === location.id);
-				const standardPortId = String(gate?.standardPortRef || "").split("/").at(-1);
-				if (!standardPortId) return res.status(409).json({ error: `${location.name} has no reference standard port in Tidal Database.` });
-				const request = { portId: standardPortId || undefined, contextLocationId: location?.id, position: representativePosition(location), includeEvents: true };
+				const resolved = await gateLocation(req.query);
+				if (!resolved.location) return res.status(resolved.statusCode).json({ error: resolved.error });
+				const location = resolved.location;
+				const catalogue = await gateConstants();
+				const entry = catalogue.gates.find((candidate) => candidate.locationId === location.id);
+				if (!entry?.calculationReady) {
+					const diagnostic = catalogue.diagnostics.planning.find((candidate) => candidate.locationId === location.id);
+					return res.status(409).json({
+						error: `${location.name} is not operationally ready for gate-passage calculations.`,
+						locationId: location.id,
+						reasonCodes: diagnostic?.reasonCodes || ["missing-gate-definition"],
+					});
+				}
+				const reference = entry.record.reference;
+				const request = {
+					portId: reference.portLocationId,
+					contextLocationId: location.id,
+					position: representativePosition(location),
+					includeEvents: true,
+				};
 				const result = req.query?.refresh === "1" ? await tide.refresh(request) : await tide.status(request);
 				if (!result.valid) return res.status(503).json({ error: result.error || "Tidal data are unavailable." });
 				return res.json({
 					stationId: result.station?.id, stationName: result.station?.name,
-					timeStandard: "UT", location: req.query?.location || null,
+					timeStandard: "UT", locationId: location.id, locationName: location.name,
+					gateSelection: resolved.selection,
+					reference: { portLocationId: reference.portLocationId, event: reference.event },
+					referenceEvent: reference.event,
 					events: ukhoEvents(result), cache: cacheShape(result),
 				});
 			} catch (error) { return res.status(503).json({ error: error.message }); }
@@ -319,7 +453,7 @@ module.exports = function ajrmMarinePlanning(app) {
 	}
 
 	async function diagnosticSnapshot() {
-		const savedGateSettings = gateSettings(await readJson(gateSettingsFile, {}));
+		const savedGateSettings = (await loadGateSettings()).settings;
 		const savedAnchorState = await anchorState();
 		if (savedAnchorState.tideData) {
 			delete savedAnchorState.tideData.events;
@@ -354,9 +488,14 @@ module.exports = function ajrmMarinePlanning(app) {
 		return app[name] || globalThis[SERVICE_REGISTRIES[name]] || null;
 	}
 
-	async function sharedGateLocations() {
+	async function sharedTideWorkspaceLocations() {
 		const locations = await requireService("ajrmMarineLocations", "location").list({ workspace: "tides" });
-		return locations.filter((location) => location.types.includes("tidalGate"));
+		return Array.isArray(locations) ? locations : [];
+	}
+
+	async function sharedGateLocations() {
+		return (await sharedTideWorkspaceLocations())
+			.filter((location) => Array.isArray(location.types) && location.types.includes("tidalGate"));
 	}
 
 	async function sharedTideLocations() {
@@ -382,46 +521,208 @@ module.exports = function ajrmMarinePlanning(app) {
 		}).sort((left,right) => left.name.localeCompare(right.name));
 	}
 
-	async function gateLocation(name) {
-		if (!name) return null;
-		const wanted = normalizeName(name);
-		const values = await sharedGateLocations();
-		return values.find((location) => normalizeName(location.name) === wanted) || null;
+	async function loadGateSettings({ persistMigration = false } = {}) {
+		const raw = await readJson(gateSettingsFile, {});
+		const settings = gateSettings(raw);
+		settings.selectedGateLocationId = String(settings.selectedGateLocationId || "").trim();
+		const legacyName = typeof raw.selectedGate === "string" ? raw.selectedGate.trim() : "";
+		let selectionMigration = null;
+		let unresolvedLegacyName = "";
+
+		if (!settings.selectedGateLocationId && legacyName) {
+			try {
+				const locations = await sharedGateLocations();
+				const matches = locations.filter((location) => location.name === legacyName);
+				if (matches.length === 1) {
+					settings.selectedGateLocationId = matches[0].id;
+					selectionMigration = {
+						status: "migrated",
+						legacyName,
+						locationId: matches[0].id,
+						message: "The saved tidal-gate name was migrated to its unique exact Location Editor ID.",
+					};
+					if (persistMigration) await writeJson(gateSettingsFile, settings);
+				} else {
+					unresolvedLegacyName = legacyName;
+					selectionMigration = {
+						status: matches.length ? "ambiguous" : "unresolved",
+						legacyName,
+						message: matches.length
+							? "The saved tidal-gate name is not unique; select a gate by Location Editor ID."
+							: "The saved tidal-gate name no longer matches a Location Editor gate exactly; select a gate by ID.",
+					};
+				}
+			} catch (error) {
+				unresolvedLegacyName = legacyName;
+				selectionMigration = {
+					status: "deferred",
+					legacyName,
+					message: `The saved tidal-gate name could not yet be migrated: ${error.message}`,
+				};
+			}
+		}
+		return { settings, selectionMigration, unresolvedLegacyName };
+	}
+
+	async function gateLocation(query = {}) {
+		const locations = await sharedGateLocations();
+		const locationId = String(query.locationId || "").trim();
+		if (locationId) {
+			const location = locations.find((entry) => entry.id === locationId) || null;
+			return location
+				? { location, selection: { mode: "locationId" } }
+				: { location: null, statusCode: 404, error: "The selected tidal-gate location ID was not found in Location Editor." };
+		}
+
+		const legacyName = String(query.location || "").trim();
+		if (!legacyName) {
+			return { location: null, statusCode: 400, error: "A tidal-gate locationId is required." };
+		}
+		const matches = locations.filter((entry) => entry.name === legacyName);
+		if (matches.length === 1) {
+			return {
+				location: matches[0],
+				selection: { mode: "legacy-exact-name", legacyName, locationId: matches[0].id },
+			};
+		}
+		return {
+			location: null,
+			statusCode: matches.length ? 409 : 404,
+			error: matches.length
+				? "The legacy tidal-gate name is not unique; use locationId."
+				: "The legacy tidal-gate name did not exactly match a Location Editor gate; use locationId.",
+		};
+	}
+
+	async function sourceGateCatalogue(tidalDatabase) {
+		if (typeof tidalDatabase.getGateCatalogue === "function") {
+			const catalogue = await tidalDatabase.getGateCatalogue();
+			const supported = catalogue?.contract === TIDAL_GATE_CATALOGUE_CONTRACT
+				&& catalogue?.contractVersion === 2;
+			return {
+				mode: "getGateCatalogue",
+				contract: catalogue?.contract || null,
+				contractVersion: catalogue?.contractVersion || null,
+				gates: Array.isArray(catalogue?.gates) ? catalogue.gates : [],
+				operationalLocationIds: new Set(supported && Array.isArray(catalogue.operationalLocationIds)
+					? catalogue.operationalLocationIds.filter((value) => typeof value === "string")
+					: []),
+				diagnostics: catalogue?.diagnostics || null,
+				supported,
+			};
+		}
+		return {
+			mode: "listGates-display-only-fallback",
+			contract: null,
+			contractVersion: null,
+			gates: typeof tidalDatabase.listGates === "function" ? tidalDatabase.listGates() : [],
+			operationalLocationIds: new Set(),
+			diagnostics: [{ code: "gate-catalogue-api-unavailable", message: "Update Tidal Database for operational v2 gate calculations." }],
+			supported: false,
+		};
+	}
+
+	function gateReferenceLocationId(record) {
+		if (record?.contract === TIDAL_GATE_CONTRACT_V2) return String(record.reference?.portLocationId || "").trim();
+		if (record?.contract === TIDAL_GATE_CONTRACT_V1) return String(record.standardPortRef || "").split("/").at(-1) || "";
+		return "";
+	}
+
+	function gateCompatibility(record) {
+		if (!record) return null;
+		if (record.contract === TIDAL_GATE_CONTRACT_V1) {
+			return {
+				fromContract: TIDAL_GATE_CONTRACT_V1,
+				mode: "raw-v1-display-only",
+				original: clone(record),
+			};
+		}
+		if (record.compatibility?.original) return clone(record.compatibility);
+		if (record.legacy?.record) {
+			return {
+				fromContract: TIDAL_GATE_CONTRACT_V1,
+				mode: "migrated-v1-display-only",
+				original: clone(record.legacy.record),
+			};
+		}
+		return record.compatibility ? clone(record.compatibility) : null;
 	}
 
 	async function gateConstants() {
-		const shared = await sharedGateLocations();
+		const sharedLocations = await sharedTideWorkspaceLocations();
+		const locationsById = new Map(sharedLocations.map((location) => [location.id, location]));
+		const locations = sharedLocations
+			.filter((location) => Array.isArray(location.types) && location.types.includes("tidalGate"))
+			.sort((left, right) => left.name.localeCompare(right.name));
 		const tidalDatabase = requireService("ajrmMarineTidalDatabase", "tidal database");
-		const gates = new Map(tidalDatabase.listGates().map((gate) => [gate.locationId, gate]));
-		const ports = new Map(tidalDatabase.listPorts().map((port) => [port.locationId, port]));
-		const result = {};
-		for (const location of shared) {
-			const gate = gates.get(location.id);
-			if (gate?.contract !== "ajrm-tidal-gate-constants-v1") continue;
-			const standardId = String(gate.standardPortRef || "").split("/").at(-1);
-			const standard = ports.get(standardId);
-			const position = representativePosition(location);
-			result[location.name] = {
-				location: location.name,
-				latitude: String(position?.latitude ?? ""), longitude: String(position?.longitude ?? ""),
-				floodSet: gate.floodSet || "", ebbSet: gate.ebbSet || "",
-				springPeakFlow: gate.springPeakFlowKnots ?? "", neapPeakFlow: gate.neapPeakFlowKnots ?? "",
-				floodSpringAfter: gate.floodSpringAfter || "", floodNeapAfter: gate.floodNeapAfter || "",
-				floodSpringSlack: gate.floodSpringSlack || "", floodNeapSlack: gate.floodNeapSlack || "",
-				ebbSpringAfter: gate.ebbSpringAfter || "", ebbNeapAfter: gate.ebbNeapAfter || "",
-				ebbSpringSlack: gate.ebbSpringSlack || "", ebbNeapSlack: gate.ebbNeapSlack || "",
-				source: gate.source || "",
-				locationId: location.id,
-				standardPortName: standard?.name || "",
-				standardPort: standard ? {
-					locationId: standard.locationId,
-					name: standard.name,
-					stationId: standard.prediction?.stationId || null,
-					referenceLevels: standard.referenceLevels || null,
-				} : null,
-			};
+		const source = await sourceGateCatalogue(tidalDatabase);
+		const records = Array.isArray(source.gates) ? source.gates : [];
+		const recordsByLocationId = new Map();
+		for (const record of records) {
+			const locationId = typeof record?.locationId === "string" ? record.locationId : "";
+			if (!locationId) continue;
+			if (!recordsByLocationId.has(locationId)) recordsByLocationId.set(locationId, []);
+			recordsByLocationId.get(locationId).push(record);
 		}
-		return result;
+		const ports = new Map((typeof tidalDatabase.listPorts === "function" ? tidalDatabase.listPorts() : [])
+			.map((port) => [port.locationId, port]));
+		const planningDiagnostics = [];
+		const gates = locations.map((location) => {
+			const matchingRecords = recordsByLocationId.get(location.id) || [];
+			const record = matchingRecords[0] || null;
+			const referencePortId = gateReferenceLocationId(record);
+			const port = ports.get(referencePortId) || null;
+			const portLocation = locationsById.get(referencePortId) || null;
+			const joinedPort = port && portLocation ? { port, location: portLocation } : null;
+			const reasonCodes = gateDefinitionReasonCodes({
+				record,
+				location,
+				referencePort: joinedPort,
+				sourceOperational: source.supported && source.operationalLocationIds.has(location.id),
+				duplicate: matchingRecords.length > 1,
+			});
+			const position = representativePosition(location);
+			planningDiagnostics.push({ locationId: location.id, reasonCodes });
+			return {
+				locationId: location.id,
+				name: location.name,
+				latitude: Number.isFinite(position?.latitude) ? position.latitude : null,
+				longitude: Number.isFinite(position?.longitude) ? position.longitude : null,
+				record: record ? clone(record) : null,
+				referencePort: joinedPort ? {
+					locationId: port.locationId,
+					name: portLocation.name,
+					stationId: port.prediction?.stationId || null,
+					referenceLevels: port.referenceLevels ? clone(port.referenceLevels) : null,
+				} : null,
+				calculationReady: reasonCodes.length === 0,
+				readiness: record?.readiness ? clone(record.readiness) : {
+					state: record?.contract === TIDAL_GATE_CONTRACT_V1 ? "needs-review" : "missing",
+					reasons: reasonCodes,
+				},
+				compatibility: gateCompatibility(record),
+			};
+		});
+		const locationIds = new Set(locations.map((location) => location.id));
+		const unjoinedRecords = records.filter((record) => !locationIds.has(record?.locationId)).map((record) => clone(record));
+		return {
+			contract: PLANNING_GATE_CATALOGUE_CONTRACT,
+			contractVersion: 2,
+			gates,
+			operationalLocationIds: gates.filter((entry) => entry.calculationReady).map((entry) => entry.locationId),
+			diagnostics: {
+				source: {
+					mode: source.mode,
+					contract: source.contract,
+					contractVersion: source.contractVersion,
+					supported: source.supported,
+					operationalLocationIds: [...source.operationalLocationIds],
+					details: clone(source.diagnostics),
+				},
+				planning: planningDiagnostics,
+				unjoinedRecords,
+			},
+		};
 	}
 
 	async function anchorState() {

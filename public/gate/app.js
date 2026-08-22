@@ -1,6 +1,10 @@
 /** Browser-side gate-passage model and UI, backed by shared Signal K services. */
+import { calculateFlowAt, calculateGateSchedule } from "./gate-calculator.mjs";
+import { normalizeTideEvents } from "./gate-contract.mjs";
+
 const $ = (id) => document.getElementById(id);
-const webVersion = "0.5.16";
+const webVersion = "0.5.20";
+const generalSafetyDetail = "Forecasts, tidal predictions and modelled stream rates can be wrong. Cross-check current charts, official predictions, forecasts and observed conditions; the skipper remains responsible for the passage decision.";
 
 const selectedColumns = [
   { label: "Local Time (UK)", source: "Local Time", format: "localTimeWithDay" },
@@ -24,47 +28,45 @@ const selectedColumns = [
 
 const locationConstantColumns = [
   { key: "location", label: "Location", type: "text" },
-  { key: "standardPortName", label: "Standard Port", type: "text" },
+  { key: "locationId", label: "Location ID", type: "text" },
   { key: "latitude", label: "Latitude", type: "number" },
   { key: "longitude", label: "Longitude", type: "number" },
   { key: "maps", label: "Google Maps", type: "link" },
-  { key: "floodSet", label: "Flood Set", type: "cardinal" },
-  { key: "ebbSet", label: "Ebb Set", type: "cardinal" },
-  { key: "springPeakFlow", label: "Spring Peak Flow (kn)", type: "number" },
-  { key: "neapPeakFlow", label: "Neap Peak Flow (kn)", type: "number" },
-  { key: "source", label: "Source", type: "text" },
-  { key: "floodSpringAfter", label: "Flood Spring After HW", type: "duration" },
-  { key: "floodNeapAfter", label: "Flood Neap After HW", type: "duration" },
-  { key: "floodSpringSlack", label: "Flood Spring Slack", type: "duration" },
-  { key: "floodNeapSlack", label: "Flood Neap Slack", type: "duration" },
-  { key: "ebbSpringAfter", label: "Ebb Spring After HW", type: "duration" },
-  { key: "ebbNeapAfter", label: "Ebb Neap After HW", type: "duration" },
-  { key: "ebbSpringSlack", label: "Ebb Spring Slack", type: "duration" },
-  { key: "ebbNeapSlack", label: "Ebb Neap Slack", type: "duration" },
+  { key: "contract", label: "Contract", type: "text" },
+  { key: "readiness", label: "Readiness", type: "text" },
+  { key: "readinessReasons", label: "Readiness Reasons", type: "text" },
+  { key: "calculationReady", label: "Effective readiness", type: "text" },
+  { key: "referencePortName", label: "Reference Port", type: "text" },
+  { key: "referenceEvent", label: "Reference Event", type: "text" },
+  { key: "turnLabels", label: "Independent Turns", type: "text" },
+  { key: "rateObservationCount", label: "Rate Observations", type: "number" },
+  { key: "sources", label: "Structured Sources", type: "text" },
+  { key: "review", label: "Review", type: "text" },
+  { key: "cautions", label: "Cautions", type: "text" },
+  { key: "hazards", label: "Hazards", type: "text" },
+  { key: "uncertainty", label: "Uncertainty", type: "text" },
+  { key: "compatibility", label: "Compatibility", type: "text" },
 ];
 
 const locationConstants = {};
-const timeColumns = [
-  "Flood Slack Starts",
-  "Flood Commences",
-  "Flood Slack Ends",
-  "Peak Flood Time",
-  "Ebb Slack Starts",
-  "Ebb Commences",
-  "Ebb Slack Ends",
-  "Peak Ebb Time"
-];
+let gateCatalogue = null;
+let currentGateSchedule = null;
 
 const gateCalculationColumns = [
-  "HW Time (UTC)",
-  "HW Height (m)",
+  "Reference Time (UTC)",
+  "Reference Event",
+  "Reference Height (m)",
   "Range (m)",
   "% Spring",
+  "Turn ID",
+  "Turn Name",
+  "Direction (deg)",
+  "Direction Label",
+  "Turn Time (UTC)",
+  "Slack Starts (UTC)",
+  "Slack Ends (UTC)",
   "Peak Flow (kn)",
-  "Peak Flood Dir (deg)",
-  "Flood Commences",
-  "Ebb Commences",
-  "Peak Ebb Dir (deg)",
+  "Location ID",
   "Location"
 ];
 
@@ -84,10 +86,8 @@ const fetchedWeatherColumns = [
 
 const fetchedTideColumns = [
   "Time (UT)",
-  "Tide",
-  "Height (m)",
-  "Range (m)",
-  "% Spring"
+  "Event",
+  "Height (m)"
 ];
 
 const beaufortBounds = [
@@ -143,12 +143,14 @@ let currentPlanRows = null;
 let currentWeatherMeta = null;
 let currentTideMeta = null;
 let currentTideEvents = null;
+let gateLoadGeneration = 0;
+let settingsWriteChain = Promise.resolve();
 let hourRepeatTimer = null;
 let hourRepeatDelayTimer = null;
 const weatherRowsByGate = new Map();
 const weatherStatusByGate = new Map();
 let appSettings = {
-  selectedGate: "",
+  selectedGateLocationId: "",
   selectedHeading: "270",
   selectedCrewCapability: "competent",
   speed: "5",
@@ -156,10 +158,6 @@ let appSettings = {
   standardMhwn: "",
   standardMlwn: "",
   standardMlws: "",
-  fallbackCycleHours: "12.5",
-  fallbackEbbHours: "6.2",
-  peakEbbOffsetMinutes: "180",
-  peakFlowMinimumKn: "0.5",
   knotsToMs: "0.5144",
   gravityMs2: "9.81",
   displacementReferenceKg: "5604",
@@ -193,10 +191,6 @@ let appSettings = {
 };
 
 const calculationSettingIds = [
-  "fallbackCycleHours",
-  "fallbackEbbHours",
-  "peakEbbOffsetMinutes",
-  "peakFlowMinimumKn",
   "knotsToMs",
   "gravityMs2",
   "displacementReferenceKg",
@@ -352,7 +346,7 @@ function getPointOfSail(hdg, windFrom) {
 }
 
 function getRelativeFlow(hdg, flowDir, type) {
-  if (flowDir === "-" || flowDir === "" || Number.isNaN(Number(flowDir))) return "Slack";
+  if (flowDir === "-" || flowDir === "" || flowDir === null || Number.isNaN(Number(flowDir))) return "Unavailable";
   let targetDir = Number(flowDir);
   if (type === "Wind" || type === "WindTide") targetDir = (targetDir + 180) % 360;
   let diff = Math.abs(Number(hdg) - targetDir) % 360;
@@ -381,11 +375,6 @@ function calculateNavSpeeds(Vs, yachtHdg, Vt, tideDir) {
     onCourse: Math.max(0, sogOnCourse).toFixed(2),
     ctsAngle: ctsAngle === 0 ? "0°" : `${ctsAngle.toFixed(1)}°`
   };
-}
-
-function calculateSineRate(currentTime, startTime, endTime, peakRate) {
-  const fraction = (currentTime - startTime) / (endTime - startTime);
-  return peakRate * Math.sin(fraction * Math.PI);
 }
 
 function angularDifference(a, b) {
@@ -600,133 +589,45 @@ function londonWallTimeToUtcMs(value) {
   return utc;
 }
 
-function durationToMinutes(value) {
-  if (typeof value === "number") return value * 24 * 60;
-  if (!value || typeof value !== "string") return 0;
-  const text = value.trim();
-  const sign = text.startsWith("-") ? -1 : 1;
-
-  if (text.includes("day")) {
-    const dayMatch = text.match(/(-?\d+)\s+day/);
-    const timeMatch = text.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/);
-    const days = dayMatch ? Number(dayMatch[1]) : 0;
-    const hours = timeMatch ? Number(timeMatch[1]) : 0;
-    const minutes = timeMatch ? Number(timeMatch[2]) : 0;
-    const seconds = timeMatch?.[3] ? Number(timeMatch[3]) : 0;
-    return (days * 24 * 60) + (hours * 60) + minutes + Math.round(seconds / 60);
-  }
-
-  const clean = text.replace("-", "");
-  const [hours = 0, minutes = 0, seconds = 0] = clean.split(":").map(Number);
-  return sign * (hours * 60 + minutes + Math.round(seconds / 60));
+function formatUtcInstant(value) {
+  const ms = Date.parse(value);
+  return Number.isNaN(ms) ? "" : new Date(ms).toISOString();
 }
 
-function minutesToDuration(totalMinutes) {
-  const sign = totalMinutes < 0 ? "-" : "";
-  const abs = Math.abs(Math.round(totalMinutes));
-  const hours = Math.floor(abs / 60);
-  const minutes = abs % 60;
-  return `${sign}${hours}:${String(minutes).padStart(2, "0")}`;
-}
-
-function displayDuration(value) {
-  if (value === null || value === undefined || value === "") return "";
-  return minutesToDuration(durationToMinutes(String(value)));
-}
-
-function addMinutesToTime(value, minutes) {
-  const ms = parseTime(value);
-  if (Number.isNaN(ms)) return value;
-  return formatDateTime(ms + (minutes * 60 * 1000));
-}
-
-function midpointTime(start, end) {
-  const startMs = parseTime(start);
-  const endMs = parseTime(end);
-  if (Number.isNaN(startMs) || Number.isNaN(endMs)) return "";
-  return formatDateTime(startMs + ((endMs - startMs) / 2));
-}
-
-function interpolateMinutes(location, springKey, neapKey, springFactor) {
-  const hasSpring = String(location[springKey] ?? "").trim() !== "";
-  const hasNeap = String(location[neapKey] ?? "").trim() !== "";
-  if (!hasSpring && !hasNeap) return 0;
-  const spring = durationToMinutes(location[springKey]);
-  const neap = durationToMinutes(location[neapKey]);
-  if (!hasSpring) return neap;
-  if (!hasNeap) return spring;
-  return neap + (Number(springFactor || 0) * (spring - neap));
-}
-
-function interpolateNumber(location, springKey, neapKey, springFactor) {
-  const hasSpring = String(location[springKey] ?? "").trim() !== "";
-  const hasNeap = String(location[neapKey] ?? "").trim() !== "";
-  const spring = hasSpring ? Number(location[springKey]) : Number.NaN;
-  const neap = hasNeap ? Number(location[neapKey]) : Number.NaN;
-  if (!Number.isFinite(spring) && !Number.isFinite(neap)) return Number.NaN;
-  if (!Number.isFinite(spring)) return neap;
-  if (!Number.isFinite(neap)) return spring;
-  return neap + (Number(springFactor || 0) * (spring - neap));
-}
-
-function shiftDateString(value, minutes) {
-  const ms = parseTime(value);
-  if (Number.isNaN(ms)) return value;
-  return formatDateTime(ms + (minutes * 60 * 1000));
-}
-
-function tideCalculationRowsFromEvents(eventRows, gateName) {
-  const selected = locationConstants[gateName];
-  const headers = [
-    "HW Time (UTC)", "HW Height (m)", "Range (m)", "% Spring",
-    "Peak Flow (kn)", "Peak Flood Dir (deg)", "Peak Flood (Set)",
-    "Flood Slack Starts", "Flood Commences", "Flood Slack Ends", "Peak Flood Time",
-    "Peak Ebb Dir (deg)", "Peak Ebb (Set)", "Ebb Slack Starts", "Ebb Commences",
-    "Ebb Slack Ends", "Peak Ebb Time", "Flood Time Diff", "Slack Duration",
-    "Ebb Time Diff", "Location"
-  ];
-  if (!selected || !eventRows?.length) return [headers];
-  const sourceHeaders = eventRows[0];
-  const idx = (name) => sourceHeaders.indexOf(name);
-  const rows = [headers];
-  for (const row of eventRows.slice(1)) {
-    if (row[idx("Tide")] !== "HW") continue;
-    const hwTime = row[idx("Time (UT)")];
-    const springFactor = Number(row[idx("% Spring")] || 0);
-    const floodAfter = interpolateMinutes(selected, "floodSpringAfter", "floodNeapAfter", springFactor);
-    const ebbAfter = interpolateMinutes(selected, "ebbSpringAfter", "ebbNeapAfter", springFactor);
-    const floodSlack = interpolateMinutes(selected, "floodSpringSlack", "floodNeapSlack", springFactor);
-    const ebbSlack = interpolateMinutes(selected, "ebbSpringSlack", "ebbNeapSlack", springFactor);
-    const floodCommences = addMinutesToTime(hwTime, floodAfter);
-    const ebbCommences = addMinutesToTime(hwTime, ebbAfter);
-    const locationPeakFlow = interpolateNumber(selected, "springPeakFlow", "neapPeakFlow", springFactor);
-    const peakFlow = Math.max(settingNumber("peakFlowMinimumKn"), Number.isFinite(locationPeakFlow) ? locationPeakFlow : settingNumber("peakFlowMinimumKn"));
-
+function gateCalculationRowsFromSchedule(schedule) {
+  const rows = [gateCalculationColumns];
+  if (!schedule?.available) return rows;
+  const location = locationConstants[schedule.gateLocationId];
+  for (const turn of schedule.turnInstances) {
     rows.push([
-      hwTime,
-      row[idx("Height (m)")],
-      Number(row[idx("Range (m)")] || 0),
-      springFactor,
-      peakFlow,
-      cardinalToDegrees(selected.floodSet),
-      selected.floodSet,
-      addMinutesToTime(floodCommences, -floodSlack / 2),
-      floodCommences,
-      addMinutesToTime(floodCommences, floodSlack / 2),
-      midpointTime(floodCommences, ebbCommences),
-      cardinalToDegrees(selected.ebbSet),
-      selected.ebbSet,
-      addMinutesToTime(ebbCommences, -ebbSlack / 2),
-      ebbCommences,
-      addMinutesToTime(ebbCommences, ebbSlack / 2),
-      addMinutesToTime(ebbCommences, settingNumber("peakEbbOffsetMinutes")),
-      minutesToDuration(floodAfter),
-      minutesToDuration((floodSlack + ebbSlack) / 2),
-      minutesToDuration(ebbAfter),
-      gateName
+      formatUtcInstant(turn.reference.at),
+      turn.reference.type,
+      turn.reference.heightM,
+      turn.reference.rangeM,
+      turn.reference.springFactor,
+      turn.turnId,
+      turn.turnName,
+      turn.direction.bearingDegreesTrue,
+      turn.direction.label,
+      formatUtcInstant(turn.at),
+      formatUtcInstant(turn.slack.startAt),
+      formatUtcInstant(turn.slack.endAt),
+      turn.peakRateKn,
+      schedule.gateLocationId,
+      location?.location || schedule.gateLocationId
     ]);
   }
   return rows;
+}
+
+function explicitSlackAt(schedule, at) {
+  const time = Date.parse(at);
+  if (!Number.isFinite(time) || !schedule?.available) return null;
+  return schedule.turnInstances.find((turn) => {
+    const start = Date.parse(turn.slack.startAt);
+    const end = Date.parse(turn.slack.endAt);
+    return Number.isFinite(start) && Number.isFinite(end) && end > start && time >= start && time <= end;
+  }) || null;
 }
 
 function weatherRowsFromApi(payload) {
@@ -785,10 +686,8 @@ function weatherRowsFromApi(payload) {
   return rows;
 }
 
-function interpolateTidalFlow(weatherArray, tidesArray, settings) {
+function interpolateTidalFlow(weatherArray, schedule, settings) {
   const wHeaders = weatherArray[0];
-  const tHeaders = tidesArray[0];
-  const tIdx = (name) => tHeaders.indexOf(name);
   const lastValidCol = 22;
   const sailArrow = get8PointArrow(settings.hdg);
   const resultHeaders = [
@@ -799,87 +698,41 @@ function interpolateTidalFlow(weatherArray, tidesArray, settings) {
     "Tide Rating", "Wind Rating", "Wave Rating", "Overall"
   ];
   const result = [resultHeaders];
-  const tideData = tidesArray.slice(1);
   const COL = { windDir: 6, bForce: 9 };
-  const cycleMs = settings.fallbackCycleHours * 60 * 60 * 1000;
-  const phaseStarts = tideData.flatMap((row) => {
-    const peakRate = Number(row[tIdx("Peak Flow (kn)")]);
-    const floodStart = parseTime(row[tIdx("Flood Commences")]);
-    const ebbStart = parseTime(row[tIdx("Ebb Commences")]);
-    const floodDir = String(row[tIdx("Peak Flood Dir (deg)")]).replace(/[^\d.-]/g, "");
-    const ebbDir = String(row[tIdx("Peak Ebb Dir (deg)")]).replace(/[^\d.-]/g, "");
-    const starts = [];
-    if (Number.isFinite(floodStart) && floodDir !== "") {
-      starts.push({ status: "Flood", dir: floodDir, start: floodStart, peakRate });
-    }
-    if (Number.isFinite(ebbStart) && ebbDir !== "") {
-      starts.push({ status: "Ebb", dir: ebbDir, start: ebbStart, peakRate });
-    }
-    return starts;
-  }).sort((a, b) => a.start - b.start);
-  const phaseForTime = (wTime) => {
-    if (!phaseStarts.length) return null;
-    let candidates = phaseStarts;
-    const firstStart = phaseStarts[0].start;
-    const lastStart = phaseStarts[phaseStarts.length - 1].start;
-    if (wTime < firstStart || wTime >= lastStart) {
-      candidates = phaseStarts.flatMap((phase) => {
-        const cycleOffset = Math.floor((wTime - phase.start) / cycleMs);
-        return [cycleOffset - 1, cycleOffset, cycleOffset + 1].map((offset) => ({
-          ...phase,
-          start: phase.start + (offset * cycleMs)
-        }));
-      }).sort((a, b) => a.start - b.start);
-    }
-    for (let j = 0; j < candidates.length; j++) {
-      const phase = candidates[j];
-      const nextPhase = candidates[j + 1];
-      if (wTime >= phase.start && (!nextPhase || wTime < nextPhase.start)) {
-        return { ...phase, end: nextPhase?.start ?? phase.start + (settings.fallbackEbbHours * 60 * 60 * 1000) };
-      }
-    }
-    return null;
-  };
 
   for (let i = 1; i < weatherArray.length; i++) {
     const rawRow = weatherArray[i];
     if (!rawRow[0]) continue;
     const wTime = parseTime(rawRow[1] || rawRow[0]);
-    let tideRate = 0;
-    let tideDir = "-";
-    let tideStatus = "Slack";
-    let activePhase = null;
-
-    activePhase = phaseForTime(wTime);
-
-    if (activePhase) {
-      tideStatus = activePhase.status;
-      tideDir = activePhase.dir;
-      tideRate = calculateSineRate(wTime, activePhase.start, activePhase.end || activePhase.start + (settings.fallbackEbbHours * 60 * 60 * 1000), activePhase.peakRate);
-      if (Math.abs(tideRate) < settings.slackThreshold) {
-        tideStatus = "Slack";
-        tideRate = 0;
-        tideDir = "-";
-      }
-    }
+    if (!Number.isFinite(wTime)) continue;
+    const at = new Date(wTime).toISOString();
+    const flow = calculateFlowAt(schedule, at);
+    // Weather rows outside an explicitly bounded, calculable phase are omitted.
+    // They must not become synthetic zero/slack rows.
+    if (!flow.available) continue;
+    const tideRate = flow.rateKn;
+    const tideDir = flow.direction.bearingDegreesTrue;
+    const slack = explicitSlackAt(schedule, at);
+    const nearSlack = !slack && Math.abs(tideRate) < settings.slackThreshold;
+    const tideStatus = slack
+      ? `Slack — ${slack.turnName}`
+      : nearSlack ? `Near slack — ${flow.turnName}` : flow.turnName;
+    const modelTideStatus = slack ? "Slack" : flow.turnName;
 
     const windDirFrom = rawRow[COL.windDir];
     const pointOfSail = windDirFrom !== "" ? getPointOfSail(settings.hdg, windDirFrom) : "N/A";
-    let nav = { crabbing: settings.yachtSpeed.toFixed(2), onCourse: settings.yachtSpeed.toFixed(2), ctsAngle: "0°" };
-    if (tideStatus !== "Slack" && tideDir !== "-") {
-      nav = calculateNavSpeeds(settings.yachtSpeed, settings.hdg, tideRate, Number(tideDir));
-    }
+    const nav = calculateNavSpeeds(settings.yachtSpeed, settings.hdg, tideRate, tideDir);
 
     const tideRating = checkTideRating(nav.onCourse, settings.yachtSpeed, settings);
-    const gustContext = gustLimitForRow(rawRow, pointOfSail, tideStatus, tideRate, Number(tideDir), settings);
+    const gustContext = gustLimitForRow(rawRow, pointOfSail, modelTideStatus, tideRate, tideDir, settings);
     const windRating = checkWindComfort(rawRow[COL.bForce], pointOfSail, settings, gustContext);
-    const waveRating = checkWaveComfortOptimized(rawRow, pointOfSail, tideStatus, tideRate, Number(tideDir), settings);
+    const waveRating = checkWaveComfortOptimized(rawRow, pointOfSail, modelTideStatus, tideRate, tideDir, settings);
 
     result.push([
       ...rawRow.slice(0, lastValidCol),
       tideRate.toFixed(2),
       tideDir,
-      tideDir === "-" ? "-" : get8PointArrow(tideDir),
+      get8PointArrow(tideDir),
       tideStatus,
       getRelativeFlow(settings.hdg, tideDir, "Tide"),
       getRelativeFlow(windDirFrom, tideDir, "WindTide"),
@@ -899,30 +752,20 @@ function interpolateTidalFlow(weatherArray, tidesArray, settings) {
 }
 
 function tideCoverageEndMs(tidesArray) {
-  if (!tidesArray?.length) return Number.NaN;
-  const headers = tidesArray[0];
-  const indexes = ["Local Time", ...timeColumns]
-    .map((name) => headers.indexOf(name))
-    .filter((index) => index !== -1);
-  let end = Number.NaN;
-  for (const row of tidesArray.slice(1)) {
-    for (const index of indexes) {
-      const ms = parseTime(row[index]);
-      if (!Number.isNaN(ms) && (Number.isNaN(end) || ms > end)) end = ms;
-    }
-  }
-  return end;
+  if (!tidesArray?.available || !tidesArray.phases?.length) return Number.NaN;
+  return Math.max(...tidesArray.phases.map((phase) => Date.parse(phase.endAt)).filter(Number.isFinite));
 }
 
 function limitWeatherRowsToTideWindow(weatherRows, tidesArray) {
-  if (!weatherRows?.length || !tidesArray?.length) return weatherRows;
+  if (!weatherRows?.length || !tidesArray?.available || !tidesArray.phases?.length) return weatherRows;
+  const start = Math.min(...tidesArray.phases.map((phase) => Date.parse(phase.startAt)).filter(Number.isFinite));
   const end = tideCoverageEndMs(tidesArray);
-  if (Number.isNaN(end)) return weatherRows;
+  if (!Number.isFinite(start) || !Number.isFinite(end)) return weatherRows;
   return [
     weatherRows[0],
     ...weatherRows.slice(1).filter((row) => {
       const ms = parseTime(row[1] || row[0]);
-      return !Number.isNaN(ms) && ms <= end;
+      return !Number.isNaN(ms) && ms >= start && ms <= end;
     })
   ];
 }
@@ -976,7 +819,7 @@ function updateFreshness() {
     const gate = $("gate").value;
     const location = locationConstants[gate];
     locationCard.dataset.expired = "false";
-    locationCard.querySelector("strong").textContent = gate || "-";
+    locationCard.querySelector("strong").textContent = location?.location || "No operational gate selected";
     locationCard.querySelector("small").textContent = location?.latitude && location?.longitude
       ? `${Number(location.latitude).toFixed(5)}, ${Number(location.longitude).toFixed(5)}`
       : "No latitude/longitude set";
@@ -984,10 +827,16 @@ function updateFreshness() {
   renderFreshnessCard("weatherFreshness", weatherStatusByGate.get($("gate").value) || currentWeatherMeta, "Weather");
   renderFreshnessCard("tideFreshness", currentTideMeta, "Tide");
   const horizon = $("planningHorizon");
-  if (!horizon || !currentPlanRows?.length || !currentTideRows?.length) return;
+  if (!horizon) return;
+  if (!currentPlanRows?.length || !currentGateSchedule?.available) {
+    horizon.dataset.expired = "false";
+    horizon.querySelector("strong").textContent = "-";
+    horizon.querySelector("small").textContent = "No bounded operational tide phases";
+    return;
+  }
   const headers = currentPlanRows[0];
   const first = parseTime(currentPlanRows[1]?.[headers.indexOf("UTC Time")] || currentPlanRows[1]?.[0]);
-  const end = tideCoverageEndMs(currentTideRows);
+  const end = tideCoverageEndMs(currentGateSchedule);
   const hours = !Number.isNaN(first) && !Number.isNaN(end) ? Math.max(0, (end - first) / 3600000) : 0;
   horizon.dataset.expired = "false";
   horizon.querySelector("strong").textContent = `${(hours / 24).toFixed(1)} days`;
@@ -1079,10 +928,10 @@ function formatUtcStringAsLondonDateTime(value) {
 
 function tideColumnFormat(columnName) {
   if (columnName === "Local Time") return "localTimeWithDay";
-  if (["Time (UT)", "HW Time (UTC)", "Flood Commences", "Ebb Commences"].includes(columnName)) return "ukLocalDateTime";
+  if (["Time (UT)", "Reference Time (UTC)", "Turn Time (UTC)", "Slack Starts (UTC)", "Slack Ends (UTC)"].includes(columnName)) return "ukLocalDateTime";
   if (columnName === "Peak Flow (kn)") return "knots";
   if (columnName === "Wind (kn)" || columnName === "Gust (kn)") return "knots";
-  if (columnName === "Height (m)" || columnName === "HW Height (m)" || columnName === "LW Height (m)" || columnName === "Range (m)" || columnName === "Rise (m)" || columnName === "Wave (m)" || columnName === "Swell (m)") return "meters";
+  if (columnName === "Height (m)" || columnName === "Reference Height (m)" || columnName === "Range (m)" || columnName === "Wave (m)" || columnName === "Swell (m)") return "meters";
   if (columnName === "% Spring") return "percent";
   if (columnName.includes("Dir (deg)")) return "cardinal";
   return null;
@@ -1163,12 +1012,10 @@ function tableHeaderLabel(name) {
   if (name === "Local Time") return "Local Time (UK)";
   if (name === "Time (UT)") return "Local Time (UK)";
   if (name === "UTC Time") return "UTC Time (UT)";
-  if (name === "HW Time") return "HW Time (UT)";
-  if (name === "HW Time (UTC)") return "HW Time (UK)";
-  if (name === "Flood Commences") return "Flood Commences (UK)";
-  if (name === "Ebb Commences") return "Ebb Commences (UK)";
-  if (name === "Peak Flood Dir (deg)") return "Peak Flood Dir";
-  if (name === "Peak Ebb Dir (deg)") return "Peak Ebb Dir";
+  if (name === "Reference Time (UTC)") return "Reference Time (UK)";
+  if (name === "Turn Time (UTC)") return "Turn Time (UK)";
+  if (name === "Slack Starts (UTC)") return "Slack Starts (UK)";
+  if (name === "Slack Ends (UTC)") return "Slack Ends (UK)";
   return name;
 }
 
@@ -1267,9 +1114,23 @@ function updateGateDirections() {
   const output = $("gateDirections");
   if (!output) return;
   const location = locationConstants[$("gate").value];
-  const flood = location?.floodSet?.trim();
-  const ebb = location?.ebbSet?.trim();
-  output.textContent = flood && ebb ? `Flood ${flood} / Ebb ${ebb}` : "Direction not set";
+  const turns = location?.entry?.record?.turns || [];
+  const labels = turns.flatMap((turn) => {
+    const bearing = turn?.direction?.bearingDegreesTrue;
+    if (bearing?.state !== "known" || !Number.isFinite(bearing.value)) return [];
+    return [`${turn.name}: ${turn.direction.label} (${Number(bearing.value).toFixed(0)}°T)`];
+  });
+  output.textContent = labels.length ? labels.join(" / ") : "No operational turn directions";
+}
+
+function updateGateSafetyNotice() {
+  const record = locationConstants[$("gate").value]?.entry?.record;
+  const notes = [
+    ...(record?.cautions || []).map((entry) => `Caution: ${entry.summary}`),
+    ...(record?.hazards || []).map((entry) => `Hazard: ${entry.summary}`),
+    ...(record?.uncertainty || []).map((entry) => `${entry.blocking ? "Blocking uncertainty" : "Uncertainty"}: ${entry.summary}`)
+  ];
+  $("safetyDetail").textContent = [generalSafetyDetail, ...notes].join(" ");
 }
 
 function isCourseAlignedWithTideDirection(courseDeg, tideDeg) {
@@ -1284,17 +1145,16 @@ function updateCourseDirectionWarning() {
   if (!control || !warning) return;
   const location = locationConstants[$("gate").value];
   const course = Number($("heading").value);
-  const flood = cardinalToDegrees(location?.floodSet);
-  const ebb = cardinalToDegrees(location?.ebbSet);
-  const floodDeg = Number(flood);
-  const ebbDeg = Number(ebb);
-  const hasDirections = Number.isFinite(floodDeg) && Number.isFinite(ebbDeg);
-  const aligned = hasDirections
-    && (isCourseAlignedWithTideDirection(course, floodDeg) || isCourseAlignedWithTideDirection(course, ebbDeg));
+  const turnDirections = (location?.entry?.record?.turns || []).flatMap((turn) => {
+    const bearing = turn?.direction?.bearingDegreesTrue;
+    return bearing?.state === "known" && Number.isFinite(bearing.value) ? [bearing.value] : [];
+  });
+  const hasDirections = turnDirections.length > 0;
+  const aligned = hasDirections && turnDirections.some((direction) => isCourseAlignedWithTideDirection(course, direction));
 
   control.classList.toggle("courseMismatch", hasDirections && !aligned);
   warning.textContent = hasDirections && !aligned
-    ? `Course ${directionLabel(course)} does not match ${location.floodSet}/${location.ebbSet} tide directions.`
+    ? `Course ${directionLabel(course)} does not align with any reviewed turn direction for this gate.`
     : "";
 }
 
@@ -1412,59 +1272,52 @@ function googleMapsUrl(location) {
   return `https://www.google.com/maps?q=${encodeURIComponent(`${latitude},${longitude}`)}`;
 }
 
-function isLocationComplete(location) {
-  if (!location) return false;
-  const requiredFields = [
-    "latitude",
-    "longitude",
-    "floodSet",
-    "ebbSet",
-    "springPeakFlow",
-    "neapPeakFlow",
-    "floodSpringAfter",
-    "floodNeapAfter",
-    "ebbSpringAfter",
-    "ebbNeapAfter"
-  ];
-  const levels = location.standardPort?.referenceLevels;
-  return requiredFields.every((field) => String(location[field] ?? "").trim() !== "")
-    && Boolean(location.standardPort?.locationId && location.standardPort?.stationId)
-    && ["mhws", "mhwn", "mlwn", "mlws"].every((key) => Number.isFinite(Number(levels?.[key])));
-}
-
 function syncGateOptions(selected = $("gate").value) {
   const gate = $("gate");
-  const names = Object.keys(locationConstants);
-  const completeNames = names.filter((name) => isLocationComplete(locationConstants[name]));
-  const selectedIsComplete = locationConstants[selected] && isLocationComplete(locationConstants[selected]);
-  const active = selectedIsComplete ? selected : (completeNames[0] || names[0] || "");
-  gate.innerHTML = names.map((name) => {
-    const complete = isLocationComplete(locationConstants[name]);
-    const label = complete ? name : `${name} (incomplete)`;
-    return `<option value="${escapeHtml(name)}"${name === active ? " selected" : ""}${complete ? "" : " disabled"}>${escapeHtml(label)}</option>`;
-  }).join("");
-  if (active) gate.value = active;
+  const entries = Object.values(locationConstants);
+  const selectedIsReady = Boolean(locationConstants[selected]?.entry?.calculationReady);
+  const active = selectedIsReady ? selected : "";
+  const placeholder = entries.some((entry) => entry.entry.calculationReady)
+    ? "Select an operational tidal gate"
+    : "No operational tidal-gate records";
+  gate.innerHTML = [
+    `<option value=""${active ? "" : " selected"}>${placeholder}</option>`,
+    ...entries.map((entry) => {
+      const ready = entry.entry.calculationReady;
+      const label = ready ? entry.location : `${entry.location} (${entry.readiness}; display only)`;
+      return `<option value="${escapeHtml(entry.locationId)}"${entry.locationId === active ? " selected" : ""}${ready ? "" : " disabled"}>${escapeHtml(label)}</option>`;
+    })
+  ].join("");
+  gate.value = active;
 }
 
 async function savePlannerSelection() {
   try {
-    appSettings.selectedGate = $("gate").value;
+    appSettings.selectedGateLocationId = $("gate").value;
     appSettings.selectedHeading = $("heading").value;
     appSettings.selectedCrewCapability = $("crewCapability").value;
     appSettings.speed = $("speed").value;
-    await fetch("/plugins/signalk-ajrm-marine-planning/gate/settings", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        selectedGate: appSettings.selectedGate,
-        selectedHeading: appSettings.selectedHeading,
-        selectedCrewCapability: appSettings.selectedCrewCapability,
-        speed: appSettings.speed
-      })
+    const response = await postGateSettings({
+      selectedGateLocationId: appSettings.selectedGateLocationId,
+      selectedHeading: appSettings.selectedHeading,
+      selectedCrewCapability: appSettings.selectedCrewCapability,
+      speed: appSettings.speed
     });
+    if (!response.ok) throw new Error(`server returned ${response.status}`);
   } catch {
     // Selection persistence is helpful, but should never block replanning.
   }
+}
+
+function postGateSettings(body) {
+  const send = () => fetch("/plugins/signalk-ajrm-marine-planning/gate/settings", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body)
+    });
+  const pending = settingsWriteChain.then(send, send);
+  settingsWriteChain = pending.then(() => undefined, () => undefined);
+  return pending;
 }
 
 function renderLocationConstantsTable() {
@@ -1480,63 +1333,21 @@ function renderLocationConstantsTable() {
           : "";
         return `<td>${link}</td>`;
       }
-      const rawValue = location[column.key];
-      const value = column.type === "duration" ? displayDuration(rawValue) : rawValue;
-      return `<td>${escapeHtml(String(value ?? ""))}</td>`;
+      return `<td>${escapeHtml(String(location[column.key] ?? ""))}</td>`;
     }).join("");
     return `<tr>${cells}</tr>`;
   }).join("");
 }
 
 function tideRowsFromApi(payload) {
-  const events = Array.isArray(payload.events)
-    ? [...payload.events].sort((a, b) => Date.parse(a.DateTime) - Date.parse(b.DateTime))
-    : [];
+  const events = Array.isArray(payload.events) ? payload.events : [];
   currentTideEvents = events;
-  const tideEvents = events
-    .filter((event) => event.EventType === "HighWater" || event.EventType === "LowWater")
-    .map((event) => ({
-      time: String(event.DateTime || "").replace("T", " ").slice(0, 16),
-      type: event.EventType === "HighWater" ? "HW" : "LW",
-      height: Number(event.Height)
-    }));
-  return tideEvents.length ? tideEventsToRangeRows(tideEvents) : null;
-}
-
-function tideEventsToRangeRows(tideEvents) {
-  const eventRows = tideEvents.map((event, index) => {
-    const previous = [...tideEvents.slice(0, index)].reverse().find((candidate) => candidate.type !== event.type);
-    const next = tideEvents.slice(index + 1).find((candidate) => candidate.type !== event.type);
-    const pairedEvent = previous || next;
-    const range = pairedEvent ? Math.abs(event.height - pairedEvent.height) : Number.NaN;
-    return {
-      time: event.time,
-      type: event.type,
-      height: event.height,
-      range
-    };
-  });
-  const rows = [["Time (UT)", "Tide", "Height (m)", "Range (m)", "% Spring"]];
-  for (const row of eventRows) {
-    const range = Number(row.range);
-    const springPercent = springPercentFromReferenceRange(range);
-    rows.push([row.time, row.type, row.height, Number.isNaN(range) ? "" : range, springPercent]);
-  }
-  return rows;
-}
-
-function springPercentFromReferenceRange(range) {
-  const tideRange = Number(range);
-  if (Number.isNaN(tideRange)) return "";
-  const mhws = Number(appSettings.standardMhws);
-  const mhwn = Number(appSettings.standardMhwn);
-  const mlwn = Number(appSettings.standardMlwn);
-  const mlws = Number(appSettings.standardMlws);
-  const springRange = mhws - mlws;
-  const neapRange = mhwn - mlwn;
-  const spread = springRange - neapRange;
-  if (![springRange, neapRange, spread].every(Number.isFinite) || spread <= 0) return "";
-  return (tideRange - neapRange) / spread;
+  const normalized = normalizeTideEvents(events);
+  if (!normalized.available) return null;
+  return [
+    fetchedTideColumns,
+    ...normalized.events.map((event) => [formatUtcInstant(event.at), event.type, event.heightM])
+  ];
 }
 
 function beaufortRows() {
@@ -1606,12 +1417,35 @@ function renderComfortConstantsTable() {
   renderReadOnlyTable("comfortConstantsTable", comfortConstantsRows(), comfortConstantsRows()[0]);
 }
 
+function calculationCatalogue() {
+  return {
+    contract: "ajrm-tidal-gate-catalogue-v2",
+    contractVersion: 2,
+    gates: (gateCatalogue?.gates || []).flatMap((entry) => entry.record ? [entry.record] : []),
+    operationalLocationIds: gateCatalogue?.operationalLocationIds || [],
+    diagnostics: gateCatalogue?.diagnostics?.source?.details || { issues: [] }
+  };
+}
+
 function rebuildTidesFromLocationConstants() {
   syncGateOptions();
   applySelectedStandardPort();
   const settings = settingsFromControls();
-  currentTideRows = tideCalculationRowsFromEvents(currentFetchedTideRows, settings.gate);
+  const entry = locationConstants[settings.gate]?.entry;
+  currentGateSchedule = settings.gate && currentTideEvents?.length && entry
+    ? calculateGateSchedule({
+      catalogue: calculationCatalogue(),
+      gateLocationId: settings.gate,
+      tideEvents: currentTideEvents,
+      referenceLevels: entry.referencePort?.referenceLevels
+    })
+    : null;
+  currentTideRows = gateCalculationRowsFromSchedule(currentGateSchedule);
   renderReadOnlyTable("gateCalcTable", currentTideRows, gateCalculationColumns);
+  if (currentGateSchedule && !currentGateSchedule.available) {
+    const reason = currentGateSchedule.reasons?.map((entry) => entry.message).join(" ") || "The v2 gate schedule is unavailable.";
+    $("dataStatus").textContent = `No operational gate calculation: ${reason}`;
+  }
   recalculateCurrentPlan();
 }
 
@@ -1623,30 +1457,60 @@ async function loadLocationConstants() {
     applyLocationConstants(saved);
     renderLocationConstantsTable();
     rebuildTidesFromLocationConstants();
-    $("locationConstantsStatus").textContent = "Loaded location constants.";
+    const operational = saved.operationalLocationIds?.length || 0;
+    const total = saved.gates?.length || 0;
+    $("locationConstantsStatus").textContent = operational
+      ? `Loaded ${total} tidal gates; ${operational} are operationally ready.`
+      : `Loaded ${total} tidal gates; none are operationally ready. Legacy and incomplete records remain visible but cannot be calculated.`;
   } catch (error) {
     $("locationConstantsStatus").textContent = `Load failed: ${error.message}.`;
   }
 }
 
 function applyLocationConstants(saved) {
-  for (const name of Object.keys(locationConstants)) delete locationConstants[name];
-  for (const [name, values] of Object.entries(saved)) {
-    locationConstants[name] = { location: name };
-    for (const column of locationConstantColumns) {
-      if (column.key === "location" || column.type === "link" || column.type === "actions") continue;
-      if (Object.prototype.hasOwnProperty.call(values, column.key)) {
-        locationConstants[name][column.key] = String(values[column.key]);
-      }
-    }
-    locationConstants[name].location = name;
-    locationConstants[name].standardPort = values.standardPort || null;
+  if (saved?.contract !== "ajrm-marine-planning-gate-catalogue-v2" || saved.contractVersion !== 2 || !Array.isArray(saved.gates)) {
+    throw new Error("unsupported gate catalogue; update AJRM Marine Planning and Tidal Database together");
   }
-  syncGateOptions();
+  gateCatalogue = saved;
+  for (const locationId of Object.keys(locationConstants)) delete locationConstants[locationId];
+  for (const entry of saved.gates) {
+    if (!entry?.locationId) continue;
+    const record = entry.record;
+    const notes = (key) => (record?.[key] || []).map((note) => `${note.blocking ? "BLOCKING: " : ""}${note.summary}`).join(" / ");
+    const sources = (record?.provenance?.sources || []).map((source) => [
+      source.title,
+      source.edition ? `edition ${source.edition}` : "",
+      source.page ? `page ${source.page}` : "",
+      source.imageRef ? `image ${source.imageRef}` : ""
+    ].filter(Boolean).join(", ")).join(" / ");
+    locationConstants[entry.locationId] = {
+      location: entry.name || entry.locationId,
+      locationId: entry.locationId,
+      latitude: entry.latitude,
+      longitude: entry.longitude,
+      contract: record?.contract || "No timing record",
+      readiness: entry.readiness?.state || "missing",
+      readinessReasons: entry.readiness?.reasons?.join(" / ") || "",
+      calculationReady: entry.calculationReady ? "Operational" : "Excluded",
+      referencePortName: entry.referencePort?.name || record?.reference?.portLocationId || "",
+      referenceEvent: record?.reference?.event || "Unknown",
+      turnLabels: (record?.turns || []).map((turn) => `${turn.name || turn.id}: ${turn.direction?.label || "unknown"}`).join(" / "),
+      rateObservationCount: record?.rateObservations?.length || 0,
+      sources,
+      review: [record?.provenance?.review?.state || "unreviewed", record?.provenance?.review?.reviewedBy, record?.provenance?.review?.reviewedAt].filter(Boolean).join(" — "),
+      cautions: notes("cautions"),
+      hazards: notes("hazards"),
+      uncertainty: notes("uncertainty"),
+      compatibility: entry.compatibility?.mode || "native-v2",
+      entry
+    };
+  }
+  syncGateOptions(appSettings.selectedGateLocationId);
 }
 
 function applySelectedStandardPort() {
-  const standard = locationConstants[$("gate").value]?.standardPort;
+  const standard = locationConstants[$("gate").value]?.entry?.referencePort;
+  for (const id of ["baseTideStationName", "baseTideStationId", "standardMhws", "standardMhwn", "standardMlwn", "standardMlws"]) $(id).value = "";
   if (!standard) return;
   const levels = standard.referenceLevels || {};
   $("baseTideStationName").value = standard.name || "";
@@ -1681,7 +1545,8 @@ async function loadSettings() {
     for (const id of calculationSettingIds) {
       if ($(id)) $(id).value = settings[id] || appSettings[id];
     }
-    $("settingsStatus").textContent = settings.ukhoApiKeySet ? "Shared UKHO service is configured in Tidal Database." : "Configure the shared UKHO service in Tidal Database.";
+    const serviceStatus = settings.ukhoApiKeySet ? "Shared UKHO service is configured in Tidal Database." : "Configure the shared UKHO service in Tidal Database.";
+    $("settingsStatus").textContent = [serviceStatus, settings.selectionMigration?.message].filter(Boolean).join(" ");
   } catch (error) {
     $("settingsStatus").textContent = `Settings load failed: ${error.message}.`;
   }
@@ -1689,26 +1554,24 @@ async function loadSettings() {
 
 async function saveSettings() {
   try {
-    const selectedGate = $("gate").value;
+    const selectedGateLocationId = $("gate").value;
+    const requestGeneration = gateLoadGeneration;
     const selectedHeading = $("heading").value;
     const selectedCrewCapability = $("crewCapability").value;
     const speed = $("speed").value.trim();
     const calculationSettings = Object.fromEntries(calculationSettingIds.map((id) => [id, $(id).value.trim()]));
-    const response = await fetch("/plugins/signalk-ajrm-marine-planning/gate/settings", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        selectedGate,
-        selectedHeading,
-        selectedCrewCapability,
-        speed,
-        ...calculationSettings
-      })
+    const response = await postGateSettings({
+      selectedGateLocationId,
+      selectedHeading,
+      selectedCrewCapability,
+      speed,
+      ...calculationSettings
     });
     if (!response.ok) throw new Error(`server returned ${response.status}`);
     const settings = await response.json();
+    if (!isCurrentGateRequest(selectedGateLocationId, requestGeneration)) return;
     appSettings = { ...appSettings, ...settings };
-    if (settings.selectedGate && locationConstants[settings.selectedGate]) $("gate").value = settings.selectedGate;
+    if (settings.selectedGateLocationId && locationConstants[settings.selectedGateLocationId]?.entry?.calculationReady) $("gate").value = settings.selectedGateLocationId;
     if (settings.selectedHeading) $("heading").value = settings.selectedHeading;
     if (settings.selectedCrewCapability) $("crewCapability").value = settings.selectedCrewCapability;
     $("speed").value = settings.speed || speed;
@@ -1728,13 +1591,19 @@ async function saveSettings() {
 
 function recalculateCurrentPlan() {
   updateCourseDirectionWarning();
-  if (!currentWeatherRows || !currentTideRows || currentTideRows.length < 2) {
-    currentPlanRows = null;
+  if (!currentWeatherRows || !currentGateSchedule?.available) {
+    clearCalculatedViews();
     updateFreshness();
     return;
   }
-  const planWeatherRows = limitWeatherRowsToTodayOnward(limitWeatherRowsToTideWindow(currentWeatherRows, currentTideRows));
-  const rows = interpolateTidalFlow(planWeatherRows, currentTideRows, settingsFromControls());
+  const planWeatherRows = limitWeatherRowsToTodayOnward(limitWeatherRowsToTideWindow(currentWeatherRows, currentGateSchedule));
+  const rows = interpolateTidalFlow(planWeatherRows, currentGateSchedule, settingsFromControls());
+  if (rows.length < 2) {
+    clearCalculatedViews();
+    $("dataStatus").textContent = "No weather rows fall inside an explicitly bounded, operational tidal phase.";
+    updateFreshness();
+    return;
+  }
   currentPlanRows = rows;
   summarize(rows);
   renderTable(rows);
@@ -1744,8 +1613,11 @@ function recalculateCurrentPlan() {
 }
 
 function settingsFromControls() {
+  const gateLocationId = $("gate").value;
   const settings = {
-    gate: $("gate").value,
+    gate: gateLocationId,
+    gateLocationId,
+    gateName: locationConstants[gateLocationId]?.location || gateLocationId,
     hdg: Number($("heading").value),
     crewCapability: $("crewCapability").value,
     yachtSpeed: Number($("speed").value),
@@ -1758,14 +1630,29 @@ function settingsFromControls() {
   return settings;
 }
 
+function clearCalculatedViews() {
+  currentPlanRows = null;
+  for (const id of ["maxGust", "maxWave", "worstSog", "usable", "nogo"]) $(id).textContent = "-";
+  $("planTable").querySelector("thead").innerHTML = "";
+  $("planTable").querySelector("tbody").innerHTML = "";
+  $("hourSelect").innerHTML = "";
+  $("hourCompass").innerHTML = "";
+  $("hourCards").innerHTML = "";
+  $("hourOverall").textContent = "-";
+}
+
+function isCurrentGateRequest(gateLocationId, generation) {
+  return $("gate").value === gateLocationId && generation === gateLoadGeneration;
+}
+
 async function loadWeatherForGate(settings, options = {}) {
   const gate = settings.gate;
+  const requestGeneration = options.requestGeneration ?? gateLoadGeneration;
   try {
     const location = locationConstants[gate];
+    if (!gate || !location?.entry?.calculationReady) throw new Error("select an operational tidal gate by Location ID");
     const params = new URLSearchParams({
-      location: gate,
-      lat: location.latitude,
-      lon: location.longitude,
+      locationId: gate,
       days: "16",
       marineDays: "8"
     });
@@ -1777,11 +1664,13 @@ async function loadWeatherForGate(settings, options = {}) {
       throw new Error(`${errorPayload.error || `Weather provider returned ${response.status}`}${detail}`);
     }
     const payload = await response.json();
+    if (!isCurrentGateRequest(gate, requestGeneration)) return null;
     const rows = weatherRowsFromApi(payload);
     if (!rows) throw new Error("Weather response did not contain hourly data");
     const meta = {
       ...payload.cache,
-      location: gate,
+      locationId: gate,
+      location: settings.gateName,
       latitude: payload.latitude,
       longitude: payload.longitude,
       weatherDays: payload.weatherDays,
@@ -1793,6 +1682,7 @@ async function loadWeatherForGate(settings, options = {}) {
     $("dataStatus").textContent = "";
     return rows;
   } catch (error) {
+    if (!isCurrentGateRequest(gate, requestGeneration)) return null;
     weatherRowsByGate.delete(gate);
     weatherStatusByGate.set(gate, {
       location: gate,
@@ -1800,7 +1690,7 @@ async function loadWeatherForGate(settings, options = {}) {
       fetchedAt: null
     });
     currentWeatherMeta = null;
-    $("dataStatus").textContent = `Weather data was not loaded for ${gate} (${error.message}).`;
+    $("dataStatus").textContent = `Weather data was not loaded for ${settings.gateName || "the selected gate"} (${error.message}).`;
     if (options.manualRefresh) throw error;
     return null;
   }
@@ -1808,32 +1698,39 @@ async function loadWeatherForGate(settings, options = {}) {
 
 async function refreshWeather(options = {}) {
   const settings = settingsFromControls();
+  const requestGeneration = options.requestGeneration ?? gateLoadGeneration;
+  if (!settings.gate) {
+    const warning = "Select an operational tidal gate before refreshing weather.";
+    $("dataStatus").textContent = warning;
+    return { ok: false, warning };
+  }
   if (!options.skipBusy) setRefreshButtonsBusy(["refreshWeather", "refreshAll"], true, "Refreshing weather...");
-  $("dataStatus").textContent = `Refreshing weather for ${settings.gate}...`;
+  $("dataStatus").textContent = `Refreshing weather for ${settings.gateName}...`;
   const card = $("weatherFreshness");
   if (card) {
     card.dataset.expired = "false";
     card.querySelector("strong").textContent = "Refreshing weather...";
-    card.querySelector("small").textContent = settings.gate;
+    card.querySelector("small").textContent = settings.gateName;
   }
   try {
-    const rows = await loadWeatherForGate(settings, { manualRefresh: true });
+    const rows = await loadWeatherForGate(settings, { manualRefresh: true, requestGeneration });
+    if (!isCurrentGateRequest(settings.gate, requestGeneration)) return { ok: false, stale: true, warning: "" };
     if (rows) {
       currentWeatherRows = rows;
       renderReadOnlyTable("weatherDataTable", currentWeatherRows, fetchedWeatherColumns);
       recalculateCurrentPlan();
-      $("dataStatus").textContent = `Weather ${cacheStatusVerb(currentWeatherMeta, "updated from web")} for ${settings.gate}.`;
+      $("dataStatus").textContent = `Weather ${cacheStatusVerb(currentWeatherMeta, "updated from web")} for ${settings.gateName}.`;
       const warning = manualRefreshWarning("Weather", currentWeatherMeta);
       if (warning && !options.suppressAlerts) window.alert(warning);
       return { ok: true, warning };
     } else {
       updateFreshness();
-      const warning = `Weather could not be refreshed from the web for ${settings.gate}.`;
+      const warning = `Weather could not be refreshed from the web for ${settings.gateName}.`;
       if (!options.suppressAlerts) window.alert(warning);
       return { ok: false, warning };
     }
   } catch (error) {
-    const warning = `Weather could not be refreshed from the web for ${settings.gate}.\n\nReason: ${error.message}`;
+    const warning = `Weather could not be refreshed from the web for ${settings.gateName}.\n\nReason: ${error.message}`;
     if (!options.suppressAlerts) window.alert(warning);
     return { ok: false, warning };
   } finally {
@@ -1843,19 +1740,25 @@ async function refreshWeather(options = {}) {
 
 async function refreshTides(options = {}) {
   const settings = settingsFromControls();
+  const requestGeneration = options.requestGeneration ?? gateLoadGeneration;
   const isManualRefresh = options.manualRefresh !== false;
+  if (!settings.gate) {
+    const warning = "Select an operational tidal gate before loading tides.";
+    if (!options.silent) $("dataStatus").textContent = warning;
+    return { ok: false, warning };
+  }
   if (!options.skipBusy) setRefreshButtonsBusy(["refreshTides", "refreshAll"], true, isManualRefresh ? "Refreshing tides..." : "Loading tides...");
   if (!options.silent) {
-    $("dataStatus").textContent = `${isManualRefresh ? "Refreshing" : "Loading stored"} tides for ${settings.gate}...`;
+    $("dataStatus").textContent = `${isManualRefresh ? "Refreshing" : "Loading stored"} tides for ${settings.gateName}...`;
     const card = $("tideFreshness");
     if (card) {
       card.dataset.expired = "false";
       card.querySelector("strong").textContent = isManualRefresh ? "Refreshing tides..." : "Loading stored tides...";
-      card.querySelector("small").textContent = settings.gate;
+      card.querySelector("small").textContent = settings.gateName;
     }
   }
   try {
-    const params = new URLSearchParams({ location: settings.gate });
+    const params = new URLSearchParams({ locationId: settings.gate });
     if (isManualRefresh) params.set("refresh", "1");
     const response = await fetch(`/plugins/signalk-ajrm-marine-planning/gate/tides?${params}`);
     if (!response.ok) {
@@ -1863,25 +1766,38 @@ async function refreshTides(options = {}) {
       throw new Error(errorPayload.error || `Tide provider returned ${response.status}`);
     }
     const payload = await response.json();
+    if (!isCurrentGateRequest(settings.gate, requestGeneration)) return { ok: false, stale: true, warning: "" };
     const rows = tideRowsFromApi(payload);
-    if (!rows) throw new Error("Tide response did not contain high-water rows");
+    if (!rows) throw new Error("Tide response did not contain valid timezone-qualified HW/LW events");
     currentFetchedTideRows = rows;
     currentTideMeta = payload.cache;
     renderReadOnlyTable("fetchedTideTable", currentFetchedTideRows, fetchedTideColumns);
-    currentTideRows = tideCalculationRowsFromEvents(currentFetchedTideRows, settings.gate);
-    renderReadOnlyTable("gateCalcTable", currentTideRows, gateCalculationColumns);
-    $("dataStatus").textContent = `Tides ${cacheStatusVerb(currentTideMeta, "updated from web")} for ${settings.gate}.`;
-    recalculateCurrentPlan();
+    rebuildTidesFromLocationConstants();
+    if (!currentGateSchedule?.available) {
+      const detail = currentGateSchedule?.reasons?.map((entry) => entry.message).join(" ") || "The v2 gate schedule is unavailable.";
+      const warning = `Tide extrema were loaded for ${settings.gateName}, but no operational calculation was produced. ${detail}`;
+      $("dataStatus").textContent = warning;
+      updateFreshness();
+      if (isManualRefresh && !options.suppressAlerts) window.alert(warning);
+      return { ok: false, warning };
+    }
+    $("dataStatus").textContent = `Tides ${cacheStatusVerb(currentTideMeta, "updated from web")} for ${settings.gateName}; ${currentGateSchedule.referenceEvent} reference and independent turn semantics applied.`;
     const warning = isManualRefresh ? manualRefreshWarning("Tide data", currentTideMeta) : "";
     if (warning && !options.suppressAlerts) window.alert(warning);
     return { ok: true, warning };
   } catch (error) {
+    if (!isCurrentGateRequest(settings.gate, requestGeneration)) return { ok: false, stale: true, warning: "" };
     currentTideMeta = null;
     currentFetchedTideRows = null;
+    currentTideEvents = null;
     currentTideRows = null;
-    $("dataStatus").textContent = `Tide data was not loaded for ${settings.gate} (${error.message}).`;
+    currentGateSchedule = null;
+    clearCalculatedViews();
+    renderReadOnlyTable("fetchedTideTable", [fetchedTideColumns], fetchedTideColumns);
+    renderReadOnlyTable("gateCalcTable", [gateCalculationColumns], gateCalculationColumns);
+    $("dataStatus").textContent = `Tide data was not loaded for ${settings.gateName} (${error.message}).`;
     updateFreshness();
-    const warning = `Tide data could not be refreshed from the web for ${settings.gate}.\n\nReason: ${error.message}`;
+    const warning = `Tide data could not be refreshed from the web for ${settings.gateName}.\n\nReason: ${error.message}`;
     if (isManualRefresh && !options.suppressAlerts) window.alert(warning);
     return { ok: false, warning };
   } finally {
@@ -1890,17 +1806,21 @@ async function refreshTides(options = {}) {
 }
 
 async function refreshAll() {
+  const requestGeneration = gateLoadGeneration;
+  const gateLocationId = $("gate").value;
   setRefreshButtonsBusy(["refreshWeather", "refreshTides", "refreshAll"], true, "Refreshing all...");
   try {
-    const weatherResult = await refreshWeather({ skipBusy: true, suppressAlerts: true });
-    const tideResult = await refreshTides({ skipBusy: true, manualRefresh: true, suppressAlerts: true });
+    const weatherResult = await refreshWeather({ skipBusy: true, suppressAlerts: true, requestGeneration });
+    if (!isCurrentGateRequest(gateLocationId, requestGeneration)) return;
+    const tideResult = await refreshTides({ skipBusy: true, manualRefresh: true, suppressAlerts: true, requestGeneration });
+    if (!isCurrentGateRequest(gateLocationId, requestGeneration)) return;
     updateFreshness();
     const warnings = [weatherResult?.warning, tideResult?.warning].filter(Boolean);
     if (warnings.length) {
-      $("dataStatus").textContent = `Refresh all used stored offline data for ${settingsFromControls().gate}.`;
+      $("dataStatus").textContent = `Refresh all did not produce a complete operational plan for ${settingsFromControls().gateName || "the selected gate"}.`;
       window.alert(warnings.join("\n\n"));
     } else {
-      $("dataStatus").textContent = `Refresh all complete for ${settingsFromControls().gate}.`;
+      $("dataStatus").textContent = `Refresh all complete for ${settingsFromControls().gateName}.`;
     }
   } finally {
     setRefreshButtonsBusy(["refreshWeather", "refreshTides", "refreshAll"], false);
@@ -1908,11 +1828,31 @@ async function refreshAll() {
 }
 
 async function loadStoredData() {
+  const requestGeneration = ++gateLoadGeneration;
   const settings = settingsFromControls();
-  $("locationLabel").textContent = settings.gate;
+  $("locationLabel").textContent = settings.gateName || "No operational tidal gate selected";
   updateGateDirections();
-  currentWeatherRows = await loadWeatherForGate(settings);
-  await refreshTides({ skipBusy: true, manualRefresh: false, silent: true });
+  updateGateSafetyNotice();
+  currentWeatherRows = null;
+  currentWeatherMeta = null;
+  currentFetchedTideRows = null;
+  currentTideEvents = null;
+  currentTideMeta = null;
+  currentGateSchedule = null;
+  currentTideRows = gateCalculationRowsFromSchedule(null);
+  clearCalculatedViews();
+  renderReadOnlyTable("weatherDataTable", [fetchedWeatherColumns], fetchedWeatherColumns);
+  renderReadOnlyTable("fetchedTideTable", [fetchedTideColumns], fetchedTideColumns);
+  renderReadOnlyTable("gateCalcTable", currentTideRows, gateCalculationColumns);
+  if (!settings.gate || !locationConstants[settings.gate]?.entry?.calculationReady) {
+    $("dataStatus").textContent = "No calculation has run. Existing legacy and incomplete gate records are display-only until reviewed as operational v2.";
+    updateFreshness();
+    return;
+  }
+  currentWeatherRows = await loadWeatherForGate(settings, { requestGeneration });
+  if (!isCurrentGateRequest(settings.gate, requestGeneration)) return;
+  await refreshTides({ skipBusy: true, manualRefresh: false, silent: true, requestGeneration });
+  if (!isCurrentGateRequest(settings.gate, requestGeneration)) return;
   renderLocationConstantsTable();
   if (currentWeatherRows) renderReadOnlyTable("weatherDataTable", currentWeatherRows, fetchedWeatherColumns);
   if (currentTideRows) renderReadOnlyTable("gateCalcTable", currentTideRows, gateCalculationColumns);
@@ -2048,7 +1988,7 @@ async function renderAbout() {
 async function initializeApp() {
   await loadSettings();
   await loadLocationConstants();
-  syncGateOptions(appSettings.selectedGate || $("gate").value);
+  syncGateOptions(appSettings.selectedGateLocationId || $("gate").value);
   if (appSettings.selectedHeading && [...$("heading").options].some((option) => option.value === appSettings.selectedHeading)) {
     $("heading").value = appSettings.selectedHeading;
   }

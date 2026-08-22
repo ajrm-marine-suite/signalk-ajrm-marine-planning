@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Passage Planner</title>
-    <link rel="stylesheet" href="styles.css?v=0.5.11">
+    <link rel="stylesheet" href="styles.css?v=0.5.20">
   </head>
   <body>
     <header class="topbar">
@@ -148,7 +148,7 @@
         <div class="panelHeader">
           <div>
             <h2>Tidal Gate Calculations</h2>
-            <p>Calculated tidal gate windows used by the passage plan. This is read-only; edit source constants in Tidal Database.</p>
+            <p>Read-only v2 turn instances calculated from the declared HW/LW reference, range-pairing rule, independent turn semantics and operational readiness allow-list.</p>
           </div>
         </div>
         <section class="tableWrap inputTableWrap" aria-label="Tidal gate calculations">
@@ -178,7 +178,7 @@
         <div class="panelHeader">
           <div>
             <h2>Fetched Tide Data</h2>
-            <p>High-water tide rows from the source/cache, before location constants are applied.</p>
+            <p>Timezone-qualified high- and low-water extrema from the source/cache, before the reviewed gate contract is applied.</p>
           </div>
         </div>
         <section class="tableWrap inputTableWrap" aria-label="Fetched tide data">
@@ -212,7 +212,7 @@
           </div>
         </div>
         <section class="constantsGrid" aria-label="Editable constants">
-          <label><span class="labelText">Slack threshold (kn)<span class="helpIcon" tabindex="0" aria-label="Tide rates below this value are treated as slack water. Increase it to make the planner more conservative around weak streams." title="Tide rates below this value are treated as slack water. Increase it to make the planner more conservative around weak streams.">?</span></span>
+          <label><span class="labelText">Near-slack label (kn)<span class="helpIcon" tabindex="0" aria-label="Known modelled rates below this value are labelled near slack without changing their value or direction. Contract-defined slack windows are shown separately." title="Known modelled rates below this value are labelled near slack without changing their value or direction. Contract-defined slack windows are shown separately.">?</span></span>
             <input id="slack" type="number" value="1" min="0" max="4" step="0.1">
           </label>
           <label><span class="labelText">LWL (m)<span class="helpIcon" tabindex="0" aria-label="Loaded waterline length of the boat. Kept visible because wave encounter and hobby-horsing checks are boat-specific, even where the current model mainly uses encounter period." title="Loaded waterline length of the boat. Kept visible because wave encounter and hobby-horsing checks are boat-specific, even where the current model mainly uses encounter period.">?</span></span>
@@ -241,18 +241,6 @@
           </label>
           <label><span class="labelText">Reference-port MLWS (m)<span class="helpIcon" tabindex="0" aria-label="Mean Low Water Springs at the base station. Combined with MHWS to produce the reference spring range used for % Spring." title="Mean Low Water Springs at the base station. Combined with MHWS to produce the reference spring range used for % Spring.">?</span></span>
             <input id="standardMlws" type="number" value="" step="0.01" readonly>
-          </label>
-          <label><span class="labelText">Fallback cycle (hours)<span class="helpIcon" tabindex="0" aria-label="Used only at the end of the tide table when there is no following flood commencement row. It gives the active tidal gate a final search window so the last weather hours can still match a tide segment." title="Used only at the end of the tide table when there is no following flood commencement row. It gives the active tidal gate a final search window so the last weather hours can still match a tide segment.">?</span></span>
-            <input id="fallbackCycleHours" type="number" value="12.5" min="1" step="0.1">
-          </label>
-          <label><span class="labelText">Fallback ebb duration (hours)<span class="helpIcon" tabindex="0" aria-label="Used only when calculating the final ebb curve and there is no next flood start available. The planner assumes this many hours from ebb start back to slack/flood so it can draw the last sine curve." title="Used only when calculating the final ebb curve and there is no next flood start available. The planner assumes this many hours from ebb start back to slack/flood so it can draw the last sine curve.">?</span></span>
-            <input id="fallbackEbbHours" type="number" value="6.2" min="1" step="0.1">
-          </label>
-          <label><span class="labelText">Peak ebb offset (min)<span class="helpIcon" tabindex="0" aria-label="Displayed peak ebb time is estimated this many minutes after ebb commences. It is a presentation/calculation assumption for the gate table, not a web provider value." title="Displayed peak ebb time is estimated this many minutes after ebb commences. It is a presentation/calculation assumption for the gate table, not a web provider value.">?</span></span>
-            <input id="peakEbbOffsetMinutes" type="number" value="180" min="0" step="5">
-          </label>
-          <label><span class="labelText">Peak flow minimum (kn)<span class="helpIcon" tabindex="0" aria-label="Lower bound for estimated peak tidal stream. This prevents very small calculated ranges from producing an unrealistically tiny stream in the planner." title="Lower bound for estimated peak tidal stream. This prevents very small calculated ranges from producing an unrealistically tiny stream in the planner.">?</span></span>
-            <input id="peakFlowMinimumKn" type="number" value="0.5" min="0" step="0.1">
           </label>
           <label><span class="labelText">Knots to m/s<span class="helpIcon" tabindex="0" aria-label="Conversion used when comparing boat speed with wave phase speed for encounter-period calculations. Standard value is about 0.5144 metres per second per knot." title="Conversion used when comparing boat speed with wave phase speed for encounter-period calculations. Standard value is about 0.5144 metres per second per knot.">?</span></span>
             <input id="knotsToMs" type="number" value="0.5144" min="0" step="0.0001">
@@ -390,6 +378,6 @@
       </section>
     </main>
 
-    <script type="module" src="app.js?v=0.5.11"></script>
+    <script type="module" src="app.js?v=0.5.20"></script>
   </body>
 </html>

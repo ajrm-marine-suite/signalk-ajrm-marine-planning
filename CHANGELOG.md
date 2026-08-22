@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.5.20 — 2026-08-22
+
+- Consume the versioned tidal-gate v2 catalogue through stable Location IDs and
+  require Tidal Database's effective operational readiness allow-list.
+- Honour explicit HW/LW references, independently named turn directions,
+  unambiguous slack windows and exact turn-specific phase-peak observations.
+- Fail closed for legacy, incomplete, unreviewed, unknown, bounded or
+  out-of-range data; remove copied regimes, zero/slack coercion, minimum-rate
+  substitution and repeated/final fallback phases.
+- Preserve raw and migrated v1 records as visible display-only compatibility
+  data and migrate saved names only on one exact match.
+- Keep gate mutation in Tidal Database and add focused backend, calculator and
+  integration tests for the boundary.
+
 ## 0.5.19 — 2026-08-22
 
 - Carry Tidal Database capability and caution metadata into Anchor Force.
