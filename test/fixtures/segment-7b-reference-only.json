@@ -1,0 +1,700 @@
+{
+  "contract": "ajrm-planning-segment-7b-cross-contract-fixture-v1",
+  "sourcePackages": {
+    "location": "signalk-ajrm-marine-location-editor@0.6.49",
+    "tidal": "signalk-ajrm-marine-tidal-database@0.1.18"
+  },
+  "sourcePreservation": {
+    "locationPriorCount": 309,
+    "locationPriorSha256": "108da13ca8ac25d8ceebeb0313631211aa82f4288d87502b9464d47fce068192",
+    "tidalPriorGateCount": 30,
+    "tidalPriorGatesSha256": "6e677736293bcd20933e54b061663094fc1e194f47b32e38d64c6b0377edec89"
+  },
+  "locations": [
+    {
+      "id": "53ae1e7e-ec00-40f7-ab23-784644740f0b",
+      "name": "Sound of Luing (named-sea representative)",
+      "description": "Approximate representative tidal-gate marker for the OS-named Sound of Luing sea feature. It encodes no surveyed gate line, fairway, safe-water position, route, waypoint, exact stream observation, turn, slack, rate, eddy or tidal-race locus.",
+      "types": [
+        "tidalGate"
+      ],
+      "feature": {
+        "type": "Feature",
+        "properties": {},
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            -5.66924669,
+            56.22179984
+          ]
+        }
+      },
+      "properties": {
+        "provenance": {
+          "reviewStatus": "sourceChecked",
+          "warning": "OS Open Names supplies a representative point for the broad Sound of Luing Sea feature, not a surveyed gate line, fairway, safe-water position, route, waypoint or exact stream, turn, slack, rate, eddy or tidal-race locus. Its source extent is roughly 3.24 kilometres by 9.50 kilometres and cannot localize the separately described Ardluing, Fladda, Rubha Fiola or Rubha na Lic conditions; consult current official charts and publications before passage planning.",
+          "sources": [
+            {
+              "provider": "Ordnance Survey OS Open Names 2026-07",
+              "sourceId": "osgb4000000074799327; Sound of Luing; hydrography/Sea; BNG 172619,709308 transformed EPSG:27700 to EPSG:4326; source extent 170980,704511 to 174219,714013",
+              "license": "Open Government Licence 3.0 (OS OpenData)",
+              "url": "https://www.ordnancesurvey.co.uk/products/os-open-names",
+              "retrievedAt": "2026-08-22T18:56:19.000Z"
+            }
+          ]
+        },
+        "schema": "org.ajrm.marine.location/v1"
+      }
+    },
+    {
+      "id": "83192cc1-65da-4abc-b4ae-51c6c4ab54ad",
+      "name": "Dorus Mòr (named-channel representative)",
+      "description": "Approximate representative tidal-gate marker for the OS-named Dorus Mòr channel. It encodes no surveyed gate line, fairway, safe-water position, route, waypoint or exact stream, turn, slack, rate, eddy, race or overfall locus.",
+      "types": [
+        "tidalGate"
+      ],
+      "feature": {
+        "type": "Feature",
+        "properties": {},
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            -5.60992799,
+            56.12718962
+          ]
+        }
+      },
+      "properties": {
+        "provenance": {
+          "reviewStatus": "sourceChecked",
+          "warning": "OS Open Names supplies a naming and locating point for the Dorus Mòr Channel feature, not a surveyed gate line, fairway, middle-of-channel line, safe-water position, route, waypoint or exact stream, turn, slack, rate, eddy, race or overfall locus. Its source extent is roughly 1.26 kilometres by 1.05 kilometres and does not localize the source's separately described streams and hazards; consult current official charts and publications before passage planning.",
+          "sources": [
+            {
+              "provider": "Ordnance Survey OS Open Names 2026-07",
+              "sourceId": "osgb4000000074785740; Dorus Mòr; hydrography/Channel; BNG 175743,698591 transformed EPSG:27700 to EPSG:4326; source extent 175071,698066 to 176334,699116",
+              "license": "Open Government Licence 3.0 (OS OpenData)",
+              "url": "https://www.ordnancesurvey.co.uk/products/os-open-names",
+              "retrievedAt": "2026-08-22T18:56:19.000Z"
+            }
+          ]
+        },
+        "schema": "org.ajrm.marine.location/v1"
+      }
+    },
+    {
+      "id": "e0e5661f-1675-4dbb-8fa0-ea8566c62ef4",
+      "name": "Oban tidal prediction port",
+      "description": "UKHO prediction station used as the reference port for West Scotland tidal planning. Confirm the station identifier against the current UKHO service before relying on predictions.",
+      "types": [
+        "tidalStandardPort"
+      ],
+      "feature": {
+        "type": "Feature",
+        "properties": {},
+        "geometry": {
+          "type": "Point",
+          "coordinates": [
+            -5.474,
+            56.412
+          ]
+        }
+      },
+      "properties": {
+        "provenance": {
+          "reviewStatus": "imported",
+          "warning": "Migrated from the proven standalone planners' Oban reference-port configuration. Verify the provider identifier and datum in Location Editor before operational use.",
+          "sources": [
+            {
+              "provider": "ADMIRALTY Tidal API / migrated AJRM planner configuration",
+              "sourceId": "0372",
+              "license": "UKHO service terms apply",
+              "url": "https://www.admiralty.co.uk/access-data/tidal-data",
+              "retrievedAt": "2026-08-18T00:00:00.000Z"
+            }
+          ]
+        },
+        "schema": "org.ajrm.marine.location/v1"
+      }
+    }
+  ],
+  "ports": [
+    {
+      "locationId": "e0e5661f-1675-4dbb-8fa0-ea8566c62ef4",
+      "name": "Oban tidal prediction port",
+      "kind": "standard",
+      "datum": "UKHO station datum",
+      "referenceLevels": {
+        "mhws": 4,
+        "mhwn": 2.9,
+        "mlwn": 1.8,
+        "mlws": 0.7
+      },
+      "prediction": {
+        "mode": "provider",
+        "providerId": "ukhoTidalEvents",
+        "stationId": "0372",
+        "stationName": "Oban"
+      }
+    }
+  ],
+  "catalogue": {
+    "contract": "ajrm-tidal-gate-catalogue-v2",
+    "contractVersion": 2,
+    "gates": [
+      {
+        "contract": "ajrm-tidal-gate-constants-v2",
+        "contractVersion": 2,
+        "revision": 1,
+        "locationId": "53ae1e7e-ec00-40f7-ab23-784644740f0b",
+        "conventions": {
+          "offsetSign": "positive-after-reference-event",
+          "directionBearing": "degrees-true-current-towards"
+        },
+        "reference": {
+          "portLocationId": "e0e5661f-1675-4dbb-8fa0-ea8566c62ef4",
+          "event": "HW",
+          "sourceIds": [
+            "img-5390-sound-of-luing-tides",
+            "img-5408-hw-notation"
+          ]
+        },
+        "flowModel": {
+          "kind": "unavailable"
+        },
+        "regimeInterpolation": {
+          "kind": "unavailable"
+        },
+        "turns": [
+          {
+            "id": "flood-north-going",
+            "name": "Flood begins northwards",
+            "direction": {
+              "label": "Flood / north-going stream",
+              "bearingDegreesTrue": {
+                "state": "unavailable",
+                "reason": "The source names a north-going stream and separately describes the flood, but gives no true current-towards bearing.",
+                "sourceIds": [
+                  "img-5390-sound-of-luing-tides"
+                ]
+              }
+            },
+            "offsets": {
+              "unit": "minutes",
+              "spring": {
+                "state": "unavailable",
+                "reason": "The source says on average that the north-going stream begins +270 min at springs relative to HW Oban; it supplies no exact turn instant or precision bound.",
+                "sourceIds": [
+                  "img-5390-sound-of-luing-tides",
+                  "img-5408-hw-notation"
+                ]
+              },
+              "neap": {
+                "state": "unavailable",
+                "reason": "The source says on average that the north-going stream begins +315 min at neaps relative to HW Oban; it supplies no exact turn instant or precision bound.",
+                "sourceIds": [
+                  "img-5390-sound-of-luing-tides",
+                  "img-5408-hw-notation"
+                ]
+              }
+            },
+            "slack": {
+              "unit": "minutes",
+              "spring": {
+                "semantics": "unavailable",
+                "reason": "The source reports a passage-level 15-minute spring slack-water duration but does not assign it to this turn or define total-centred versus before/after placement.",
+                "sourceIds": [
+                  "img-5390-sound-of-luing-tides"
+                ]
+              },
+              "neap": {
+                "semantics": "unavailable",
+                "reason": "The source reports a passage-level 60-minute neap slack-water duration but does not assign it to this turn or define total-centred versus before/after placement.",
+                "sourceIds": [
+                  "img-5390-sound-of-luing-tides"
+                ]
+              }
+            }
+          },
+          {
+            "id": "ebb-south-going",
+            "name": "Ebb begins southwards",
+            "direction": {
+              "label": "Ebb / south-going stream",
+              "bearingDegreesTrue": {
+                "state": "unavailable",
+                "reason": "The source names a south-going stream and separately describes the ebb, but gives no true current-towards bearing.",
+                "sourceIds": [
+                  "img-5390-sound-of-luing-tides"
+                ]
+              }
+            },
+            "offsets": {
+              "unit": "minutes",
+              "spring": {
+                "state": "unavailable",
+                "reason": "The source says on average that the south-going stream begins -105 min at springs relative to HW Oban; it supplies no exact turn instant or precision bound.",
+                "sourceIds": [
+                  "img-5390-sound-of-luing-tides",
+                  "img-5408-hw-notation"
+                ]
+              },
+              "neap": {
+                "state": "unavailable",
+                "reason": "The source says on average that the south-going stream begins -60 min at neaps relative to HW Oban; it supplies no exact turn instant or precision bound.",
+                "sourceIds": [
+                  "img-5390-sound-of-luing-tides",
+                  "img-5408-hw-notation"
+                ]
+              }
+            },
+            "slack": {
+              "unit": "minutes",
+              "spring": {
+                "semantics": "unavailable",
+                "reason": "The source reports a passage-level 15-minute spring slack-water duration but does not assign it to this turn or define total-centred versus before/after placement.",
+                "sourceIds": [
+                  "img-5390-sound-of-luing-tides"
+                ]
+              },
+              "neap": {
+                "semantics": "unavailable",
+                "reason": "The source reports a passage-level 60-minute neap slack-water duration but does not assign it to this turn or define total-centred versus before/after placement.",
+                "sourceIds": [
+                  "img-5390-sound-of-luing-tides"
+                ]
+              }
+            }
+          }
+        ],
+        "rateObservations": [],
+        "provenance": {
+          "sources": [
+            {
+              "id": "img-5390-sound-of-luing-tides",
+              "kind": "pilot-book",
+              "title": null,
+              "publisher": null,
+              "edition": null,
+              "page": null,
+              "imageRef": "IMG_5390.jpeg; visibly headed Sound of Luing; target Tides and Dangers continue from the left into the top of the right column, followed by clipped initial Sound Directions; discrete paragraph beginning 'The photograph...' through the next blue Anchorage heading is Corryvreckan-focused and excluded; Anchorage is separately headed and outside gate evidence",
+              "url": null,
+              "retrievedAt": "2026-08-22T18:56:19.000Z"
+            },
+            {
+              "id": "img-5408-hw-notation",
+              "kind": "pilot-book",
+              "title": null,
+              "publisher": null,
+              "edition": null,
+              "page": null,
+              "imageRef": "IMG_5408.jpeg; previously reviewed notation key identifies Oban stream offsets as relative to HW; not reopened for Segment 7B",
+              "url": null,
+              "retrievedAt": "2026-08-22T14:06:04.000Z"
+            }
+          ],
+          "review": {
+            "state": "reviewed",
+            "reviewedBy": "OpenAI Codex for Anthony McDonald",
+            "reviewedAt": "2026-08-22T18:56:19.000Z",
+            "notes": "IMG_5390 is visibly headed Sound of Luing. Its Tides and Dangers material continues from the left into the top of the right column, followed by clipped initial Sound Directions. The discrete paragraph beginning 'The photograph...' through the next blue Anchorage heading is Corryvreckan-focused and excluded; separately headed Anchorage is outside gate evidence. The Sound section says tide changes are on average, then gives separate north-going spring/neap beginnings of +270/+315 min and south-going beginnings of -105/-60 min against Oban; the prior notation key supplies the HW meaning. The passage-level 15-minute spring and 60-minute neap slack durations have no turn assignment or placement. Both flood and ebb vary spatially from a stated 3 kn springs at Ardluing to maxima of 7 kn springs and 5 kn neaps among islands around Fladda, so the values are not copied into turn records or assigned to the broad OS named-sea point. The source also describes a local ebb continuing about one hour after mid-channel flood begins, a clipped drying obstruction associated with Belnahua, and course-keeping cautions around overfalls and current. No true bearing, supported flow model or reference-range interpolation is stated. Outer/right and lower Sound text is clipped, so Dangers and Directions remain incomplete. The positive v2 operational checklist therefore fails closed; the legacy Sound of Luing Location and v1 gate remain unchanged."
+          }
+        },
+        "cautions": [
+          {
+            "id": "local-ebb-persists-after-mid-channel-flood",
+            "summary": "The source says the last of the ebb along the Lunga shore can continue for approximately 60 minutes after the flood begins in mid-channel; no route-specific asynchronous-turn model is supplied.",
+            "sourceIds": [
+              "img-5390-sound-of-luing-tides"
+            ],
+            "blocking": true
+          },
+          {
+            "id": "sound-dangers-text-incomplete",
+            "summary": "The Sound of Luing Dangers block continues into the top of IMG_5390's right column, followed by clipped initial Sound Directions. The discrete Corryvreckan-focused paragraph beginning 'The photograph...' is excluded through the next blue Anchorage heading, and separately headed Anchorage is outside gate evidence, so target hazards and passage directions are not exhaustively captured.",
+            "sourceIds": [
+              "img-5390-sound-of-luing-tides"
+            ],
+            "blocking": true
+          },
+          {
+            "id": "clipped-directions-course-keeping",
+            "summary": "The visible initial Sound Directions gives broad course-keeping cautions around overfalls and current, including risk of being set off course under sail in light winds, but the right edge clips wording and locality so no route or manoeuvring rule is encoded.",
+            "sourceIds": [
+              "img-5390-sound-of-luing-tides"
+            ],
+            "blocking": true
+          }
+        ],
+        "hazards": [
+          {
+            "id": "flood-race-and-directional-eddies",
+            "summary": "The source describes a flood race north of Rubha Fiola continuing west of Ormsa and Belnahua, plus an eddy off Rubha na Lic whose side changes between flood and ebb; the named-sea point supplies no exact race or eddy locus or dynamic model.",
+            "sourceIds": [
+              "img-5390-sound-of-luing-tides"
+            ],
+            "blocking": true
+          },
+          {
+            "id": "southeast-entrance-drying-island-and-rocks",
+            "summary": "The visible Dangers material identifies the drying Rubh Ard Luing at the southeast entrance with rocks extending around it and a charted buoy/berth instruction; the block continues into the right column, but clipped outer/lower text prevents exhaustive hazard capture and the broad name point is not a safe-water or clearance position.",
+            "sourceIds": [
+              "img-5390-sound-of-luing-tides"
+            ],
+            "blocking": true
+          },
+          {
+            "id": "clipped-belnahua-drying-obstruction",
+            "summary": "The top-right continuation of Sound Dangers describes an incompletely captured drying obstruction associated with Belnahua, extending about 3 cables and drying 0.3 metre; its feature and direction are clipped, so no actionable hazard geometry is encoded.",
+            "sourceIds": [
+              "img-5390-sound-of-luing-tides"
+            ],
+            "blocking": true
+          }
+        ],
+        "uncertainty": [
+          {
+            "id": "named-sea-representative-not-passage-locus",
+            "summary": "The joined Location's own OS Open Names provenance defines a representative point for a roughly 3.24 by 9.50 kilometre Sea feature, not a surveyed gate, fairway, safe-water point, route or exact stream, turn, slack, rate, Ardluing, Fladda, eddy or tidal-race locus.",
+            "sourceIds": [],
+            "blocking": true
+          },
+          {
+            "id": "turn-beginnings-are-average",
+            "summary": "The source gives spring/neap north-going beginnings of +270/+315 min and south-going beginnings of -105/-60 min relative to HW Oban, but frames the tide changes as average and supplies no exact precision bound.",
+            "sourceIds": [
+              "img-5390-sound-of-luing-tides",
+              "img-5408-hw-notation"
+            ],
+            "blocking": true
+          },
+          {
+            "id": "passage-slack-periods-not-turn-placed",
+            "summary": "The source reports passage-level slack durations of 15 minutes at springs and 60 minutes at neaps, but does not assign either to an individual turn or define centred, before or after placement.",
+            "sourceIds": [
+              "img-5390-sound-of-luing-tides"
+            ],
+            "blocking": true
+          },
+          {
+            "id": "spatially-varying-rates-not-turn-locus-records",
+            "summary": "The source applies its rate description jointly to flood and ebb and makes it spatially progressive: 3 kn springs at Ardluing, rising to maxima of 7 kn springs and 5 kn neaps among the islands around Fladda. It supplies no Ardluing neap value and these passage/locality values are not copied into turn records or assigned to the broad OS point as exact gate-local observations.",
+            "sourceIds": [
+              "img-5390-sound-of-luing-tides"
+            ],
+            "blocking": true
+          },
+          {
+            "id": "structured-publication-citation-incomplete",
+            "summary": "The supplied photograph shows no publication title, publisher, edition or page number, so the operational structured-source requirement is incomplete.",
+            "sourceIds": [
+              "img-5390-sound-of-luing-tides"
+            ],
+            "blocking": true
+          }
+        ],
+        "readiness": {
+          "state": "reference-only",
+          "reasons": [
+            "average-turn-beginnings-have-no-exact-precision",
+            "named-sea-point-not-exact-turn-slack-rate-eddy-race-locus",
+            "north-south-labels-not-true-bearings",
+            "passage-slack-periods-not-assigned-to-individual-turns",
+            "slack-placement-before-after-centred-not-stated",
+            "spatially-varying-passage-rates-not-copied-to-turns",
+            "rate-observations-not-exact-gate-local-per-turn",
+            "flow-model-not-stated",
+            "regime-interpolation-not-stated",
+            "structured-publication-citation-incomplete",
+            "sound-of-luing-dangers-incomplete-in-provided-photograph",
+            "local-ebb-persists-after-mid-channel-flood-not-modelled",
+            "tidal-race-eddy-rock-and-local-flow-hazards-not-operationally-modelled"
+          ]
+        }
+      },
+      {
+        "contract": "ajrm-tidal-gate-constants-v2",
+        "contractVersion": 2,
+        "revision": 1,
+        "locationId": "83192cc1-65da-4abc-b4ae-51c6c4ab54ad",
+        "conventions": {
+          "offsetSign": "positive-after-reference-event",
+          "directionBearing": "degrees-true-current-towards"
+        },
+        "reference": {
+          "portLocationId": "e0e5661f-1675-4dbb-8fa0-ea8566c62ef4",
+          "event": "HW",
+          "sourceIds": [
+            "img-5387-5388-dorus-mor-section",
+            "img-5408-hw-notation"
+          ]
+        },
+        "flowModel": {
+          "kind": "unavailable"
+        },
+        "regimeInterpolation": {
+          "kind": "unavailable"
+        },
+        "turns": [
+          {
+            "id": "flood-north-or-west-going",
+            "name": "Flood begins northwards or westwards",
+            "direction": {
+              "label": "Flood / north- or west-going stream",
+              "bearingDegreesTrue": {
+                "state": "unavailable",
+                "reason": "The source says flood runs east to west through Dorus Mòr and names the beginning north- or west-going, but gives no true current-towards bearing; the printed 191 and 151 degree values belong to clearing-mark instructions, not the stream.",
+                "sourceIds": [
+                  "img-5387-5388-dorus-mor-section"
+                ]
+              }
+            },
+            "offsets": {
+              "unit": "minutes",
+              "spring": {
+                "state": "unavailable",
+                "reason": "The source gives the north- or west-going beginning as +270 min at springs relative to HW Oban, then says prolonged strong west winds can advance these times considerably; it supplies no exact turn instant, correction or precision bound.",
+                "sourceIds": [
+                  "img-5387-5388-dorus-mor-section",
+                  "img-5408-hw-notation"
+                ]
+              },
+              "neap": {
+                "state": "unavailable",
+                "reason": "The source gives the north- or west-going beginning as +315 min at neaps relative to HW Oban, then says prolonged strong west winds can advance these times considerably; it supplies no exact turn instant, correction or precision bound.",
+                "sourceIds": [
+                  "img-5387-5388-dorus-mor-section",
+                  "img-5408-hw-notation"
+                ]
+              }
+            },
+            "slack": {
+              "unit": "minutes",
+              "spring": {
+                "semantics": "unavailable",
+                "reason": "The source reports a passage-level 15-minute spring slack-water duration but does not assign it to this turn or define total-centred versus before/after placement.",
+                "sourceIds": [
+                  "img-5387-5388-dorus-mor-section"
+                ]
+              },
+              "neap": {
+                "semantics": "unavailable",
+                "reason": "The source reports a passage-level 60-minute neap slack-water duration but does not assign it to this turn or define total-centred versus before/after placement.",
+                "sourceIds": [
+                  "img-5387-5388-dorus-mor-section"
+                ]
+              }
+            }
+          },
+          {
+            "id": "ebb-south-or-east-going",
+            "name": "Ebb begins southwards or eastwards",
+            "direction": {
+              "label": "Ebb / south- or east-going stream",
+              "bearingDegreesTrue": {
+                "state": "unavailable",
+                "reason": "The source says ebb runs west to east through Dorus Mòr and names the beginning south- or east-going, but gives no true current-towards bearing; the printed 191 and 151 degree values belong to clearing-mark instructions, not the stream.",
+                "sourceIds": [
+                  "img-5387-5388-dorus-mor-section"
+                ]
+              }
+            },
+            "offsets": {
+              "unit": "minutes",
+              "spring": {
+                "state": "unavailable",
+                "reason": "The source gives the south- or east-going beginning as -105 min at springs relative to HW Oban, then says prolonged strong west winds can advance these times considerably; it supplies no exact turn instant, correction or precision bound.",
+                "sourceIds": [
+                  "img-5387-5388-dorus-mor-section",
+                  "img-5408-hw-notation"
+                ]
+              },
+              "neap": {
+                "state": "unavailable",
+                "reason": "The source gives the south- or east-going beginning as -60 min at neaps relative to HW Oban, then says prolonged strong west winds can advance these times considerably; it supplies no exact turn instant, correction or precision bound.",
+                "sourceIds": [
+                  "img-5387-5388-dorus-mor-section",
+                  "img-5408-hw-notation"
+                ]
+              }
+            },
+            "slack": {
+              "unit": "minutes",
+              "spring": {
+                "semantics": "unavailable",
+                "reason": "The source reports a passage-level 15-minute spring slack-water duration but does not assign it to this turn or define total-centred versus before/after placement.",
+                "sourceIds": [
+                  "img-5387-5388-dorus-mor-section"
+                ]
+              },
+              "neap": {
+                "semantics": "unavailable",
+                "reason": "The source reports a passage-level 60-minute neap slack-water duration but does not assign it to this turn or define total-centred versus before/after placement.",
+                "sourceIds": [
+                  "img-5387-5388-dorus-mor-section"
+                ]
+              }
+            }
+          }
+        ],
+        "rateObservations": [],
+        "provenance": {
+          "sources": [
+            {
+              "id": "img-5387-5388-dorus-mor-section",
+              "kind": "pilot-book",
+              "title": null,
+              "publisher": null,
+              "edition": null,
+              "page": null,
+              "imageRef": "IMG_5387.jpeg; visibly headed Sound of Jura - east side, with only a clipped new 'Approach to ...' heading at lower right; IMG_5388.jpeg; internally attributable Dorus Mòr continuation with Tides, Dangers and Directions; primary heading, page identity and outer/bottom text incomplete; IMG_5389 begins separately headed Gulf of Corryvreckan page 60 and is excluded",
+              "url": null,
+              "retrievedAt": "2026-08-22T18:56:19.000Z"
+            },
+            {
+              "id": "img-5408-hw-notation",
+              "kind": "pilot-book",
+              "title": null,
+              "publisher": null,
+              "edition": null,
+              "page": null,
+              "imageRef": "IMG_5408.jpeg; previously reviewed notation key identifies Oban stream offsets as relative to HW; not reopened for Segment 7B",
+              "url": null,
+              "retrievedAt": "2026-08-22T14:06:04.000Z"
+            }
+          ],
+          "review": {
+            "state": "reviewed",
+            "reviewedBy": "OpenAI Codex for Anthony McDonald",
+            "reviewedAt": "2026-08-22T18:56:19.000Z",
+            "notes": "IMG_5387 is headed Sound of Jura - east side and shows only the start of a new 'Approach to ...' heading because the photographed edge clips its object. IMG_5388 starts at Tides and is attributable to Dorus Mòr from repeated internal naming and the new Corryvreckan boundary on IMG_5389, but the complete primary heading and page identity are unavailable. The body applies 8 kn springs and 6 kn neaps jointly to flood and ebb, says the fastest rate is within the first two hours, names flood east-to-west and ebb west-to-east through Dorus, and gives compound north/west and south/east spring/neap beginnings of +270/+315 and -105/-60 min against Oban. Prolonged strong west winds can advance the times considerably. Passage-level slack of 15 minutes springs and 60 minutes neaps has no turn scope or placement. Printed 191 and 151 degree clearing-line bearings are not current directions. No exact rate locus, true stream bearing, supported flow model or reference-range interpolation is stated. Outer and bottom hazard/direction text is clipped. The positive v2 operational checklist therefore fails closed; the legacy Dorus Mòr Location and v1 gate remain unchanged."
+          }
+        },
+        "cautions": [
+          {
+            "id": "strong-west-winds-can-advance-timing",
+            "summary": "The source says prolonged strong west winds can advance the stated turn beginnings considerably and supplies no numerical correction or precision bound.",
+            "sourceIds": [
+              "img-5387-5388-dorus-mor-section"
+            ],
+            "blocking": true
+          },
+          {
+            "id": "clearing-bearings-are-not-stream-bearings",
+            "summary": "The printed 191 and 151 degree bearings are clearing-mark alignments, not current-towards bearings, and must not be used to complete either turn direction.",
+            "sourceIds": [
+              "img-5387-5388-dorus-mor-section"
+            ],
+            "blocking": true
+          },
+          {
+            "id": "dorus-heading-directions-and-hazards-incomplete",
+            "summary": "The permitted photographs do not show the complete primary Dorus Mòr heading or page identity, and clip outer/bottom Dangers and Directions text; the target section is internally attributable but not exhaustively captured.",
+            "sourceIds": [
+              "img-5387-5388-dorus-mor-section"
+            ],
+            "blocking": true
+          }
+        ],
+        "hazards": [
+          {
+            "id": "wind-against-tide-turbulence-and-overfalls",
+            "summary": "The source says turbulence and overfalls increase after prolonged strong west winds and especially when wind opposes tide; no bounded timing, sea-state or locality model is supplied.",
+            "sourceIds": [
+              "img-5387-5388-dorus-mor-section"
+            ],
+            "blocking": true
+          },
+          {
+            "id": "flood-races-eddies-branches-and-area-turbulence",
+            "summary": "For the flood, the source describes branching streams, a race east of Reisa Mhic Phaidean, eddies at Craignish Point and Garbh Reisa, and turbulence or overfalls across the Dorus Mòr, Reisa an t-Sruith and Coiresa area; the channel representative localizes none of these.",
+            "sourceIds": [
+              "img-5387-5388-dorus-mor-section"
+            ],
+            "blocking": true
+          },
+          {
+            "id": "ebb-overfalls-southerly-wind-and-confused-seas",
+            "summary": "For the ebb, the source identifies the strongest stream on the south side near Garbh Reisa, converging flows and overfalls southeast of Rubha na Una, and heavy northwest-entrance overfalls plus confused seas in strong southerly wind; no exact operational hazard model is supplied.",
+            "sourceIds": [
+              "img-5387-5388-dorus-mor-section"
+            ],
+            "blocking": true
+          },
+          {
+            "id": "submerged-rock-and-incomplete-clearing-marks",
+            "summary": "The visible Dangers text identifies a submerged rock about half a mile northwest of Craignish Point toward Coiresa with 0.6 metre over it, while further rock and clearing-mark details are clipped; the channel point is not a clearance or safe-water position.",
+            "sourceIds": [
+              "img-5387-5388-dorus-mor-section"
+            ],
+            "blocking": true
+          }
+        ],
+        "uncertainty": [
+          {
+            "id": "named-channel-representative-not-passage-locus",
+            "summary": "The joined Location's own OS Open Names provenance defines a naming point for a roughly 1.26 by 1.05 kilometre Dorus Mòr Channel feature, not a surveyed gate, exact fairway, safe-water point, route, rate station or exact stream, turn, slack, rate, eddy, race or overfall locus.",
+            "sourceIds": [],
+            "blocking": true
+          },
+          {
+            "id": "turn-beginnings-are-wind-variable",
+            "summary": "The source gives spring/neap north- or west-going beginnings of +270/+315 min and south- or east-going beginnings of -105/-60 min relative to HW Oban, but says prolonged strong west winds can advance them considerably without a correction or precision bound.",
+            "sourceIds": [
+              "img-5387-5388-dorus-mor-section",
+              "img-5408-hw-notation"
+            ],
+            "blocking": true
+          },
+          {
+            "id": "passage-slack-periods-not-turn-placed",
+            "summary": "The source reports passage-level slack durations of 15 minutes at springs and 60 minutes at neaps, but does not assign either to an individual turn or define centred, before or after placement.",
+            "sourceIds": [
+              "img-5387-5388-dorus-mor-section"
+            ],
+            "blocking": true
+          },
+          {
+            "id": "passage-rates-not-turn-locus-records",
+            "summary": "The source says both flood and ebb reach 8 kn at springs and 6 kn at neaps, with the fastest rate within the first two hours. These passage-wide shared values have no exact rate locus and are not copied into individual turn records or assigned to the broad OS channel point as exact gate-local observations.",
+            "sourceIds": [
+              "img-5387-5388-dorus-mor-section"
+            ],
+            "blocking": true
+          },
+          {
+            "id": "structured-publication-citation-incomplete",
+            "summary": "The supplied photographs show no complete Dorus Mòr heading, publication title, publisher, edition or target page number, so the operational structured-source requirement is incomplete.",
+            "sourceIds": [
+              "img-5387-5388-dorus-mor-section"
+            ],
+            "blocking": true
+          }
+        ],
+        "readiness": {
+          "state": "reference-only",
+          "reasons": [
+            "wind-variable-turn-beginnings-have-no-exact-precision",
+            "named-channel-point-not-exact-turn-slack-rate-eddy-race-overfall-locus",
+            "north-west-south-east-labels-not-true-bearings",
+            "clearing-line-bearings-not-current-bearings",
+            "passage-slack-periods-not-assigned-to-individual-turns",
+            "slack-placement-before-after-centred-not-stated",
+            "passage-wide-both-direction-rates-not-copied-to-turns",
+            "rate-observations-not-exact-gate-local-per-turn",
+            "flow-model-not-stated",
+            "regime-interpolation-not-stated",
+            "structured-publication-citation-incomplete",
+            "dorus-heading-directions-and-dangers-incomplete-in-provided-photographs",
+            "wind-overfall-eddy-race-rock-and-confused-sea-hazards-not-operationally-modelled"
+          ]
+        }
+      }
+    ],
+    "operationalLocationIds": [],
+    "diagnostics": {
+      "contract": "ajrm-tidal-gate-catalogue-diagnostics-v1",
+      "contractVersion": 1,
+      "valid": true
+    }
+  }
+}

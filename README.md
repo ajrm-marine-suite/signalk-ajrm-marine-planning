@@ -1,5 +1,11 @@
 # AJRM Marine Planning
 
+Version `0.5.21` pins cross-contract regression fixtures for the Segment 7B
+Sound of Luing and Dorus Mòr candidates from Location Editor `0.6.49` and Tidal
+Database `0.1.18`. Both remain reference-only: Planning preserves their exact
+blocker lists, excludes them from its effective operational set and rejects
+gate-tide calculation before calling the shared tide service.
+
 Version `0.5.20` consumes the fail-closed `ajrm-tidal-gate-constants-v2`
 contract from AJRM Marine Tidal Database `0.1.9` or later. Gate Passage now
 selects gates by stable Location ID, honours an explicit HW or LW reference,

@@ -1,11 +1,47 @@
 /** Verifies Planning delegates spatial, tidal and weather data to their separate shared services. */
 
 const assert = require("node:assert/strict");
+const crypto = require("node:crypto");
 const fs = require("node:fs/promises");
 const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
 const createPlugin = require("../plugin/index.cjs");
+const segment7b = require("./fixtures/segment-7b-reference-only.json");
+
+const SEGMENT_7B_FIXTURE_SHA256 = "7f3d576f970fb3e8e70a9a2840169ad6971517256d8b7c8f04317268fce9184f";
+const SEGMENT_7B_BLOCKERS = new Map([
+	["53ae1e7e-ec00-40f7-ab23-784644740f0b",[
+		"average-turn-beginnings-have-no-exact-precision",
+		"named-sea-point-not-exact-turn-slack-rate-eddy-race-locus",
+		"north-south-labels-not-true-bearings",
+		"passage-slack-periods-not-assigned-to-individual-turns",
+		"slack-placement-before-after-centred-not-stated",
+		"spatially-varying-passage-rates-not-copied-to-turns",
+		"rate-observations-not-exact-gate-local-per-turn",
+		"flow-model-not-stated",
+		"regime-interpolation-not-stated",
+		"structured-publication-citation-incomplete",
+		"sound-of-luing-dangers-incomplete-in-provided-photograph",
+		"local-ebb-persists-after-mid-channel-flood-not-modelled",
+		"tidal-race-eddy-rock-and-local-flow-hazards-not-operationally-modelled",
+	]],
+	["83192cc1-65da-4abc-b4ae-51c6c4ab54ad",[
+		"wind-variable-turn-beginnings-have-no-exact-precision",
+		"named-channel-point-not-exact-turn-slack-rate-eddy-race-overfall-locus",
+		"north-west-south-east-labels-not-true-bearings",
+		"clearing-line-bearings-not-current-bearings",
+		"passage-slack-periods-not-assigned-to-individual-turns",
+		"slack-placement-before-after-centred-not-stated",
+		"passage-wide-both-direction-rates-not-copied-to-turns",
+		"rate-observations-not-exact-gate-local-per-turn",
+		"flow-model-not-stated",
+		"regime-interpolation-not-stated",
+		"structured-publication-citation-incomplete",
+		"dorus-heading-directions-and-dangers-incomplete-in-provided-photographs",
+		"wind-overfall-eddy-race-rock-and-confused-sea-hazards-not-operationally-modelled",
+	]],
+]);
 
 function response() {
 	return { statusCode: 200, status(code) { this.statusCode = code; return this; }, json(body) { this.body = body; return this; } };
@@ -281,6 +317,65 @@ test("gate tides reject records outside the effective operational allow-list", a
 	result = await setup.call("GET", "/gate/tides", { query: { locationId: setup.gate.id } });
 	assert.equal(result.statusCode, 409);
 	assert.equal(setup.calls.tide.length, 0);
+	setup.plugin.stop();
+});
+
+test("Segment 7B candidates remain blocked by the pinned Location and Tidal contracts", async (t) => {
+	assert.equal(segment7b.contract,"ajrm-planning-segment-7b-cross-contract-fixture-v1");
+	assert.deepEqual(segment7b.sourcePackages,{
+		location:"signalk-ajrm-marine-location-editor@0.6.49",
+		tidal:"signalk-ajrm-marine-tidal-database@0.1.18",
+	});
+	assert.deepEqual(segment7b.sourcePreservation,{
+		locationPriorCount:309,
+		locationPriorSha256:"108da13ca8ac25d8ceebeb0313631211aa82f4288d87502b9464d47fce068192",
+		tidalPriorGateCount:30,
+		tidalPriorGatesSha256:"6e677736293bcd20933e54b061663094fc1e194f47b32e38d64c6b0377edec89",
+	});
+	assert.equal(
+		crypto.createHash("sha256").update(JSON.stringify(segment7b)).digest("hex"),
+		SEGMENT_7B_FIXTURE_SHA256,
+	);
+	assert.equal(segment7b.catalogue.contract,"ajrm-tidal-gate-catalogue-v2");
+	assert.equal(segment7b.catalogue.contractVersion,2);
+	assert.deepEqual(segment7b.catalogue.operationalLocationIds,[]);
+	assert.equal(segment7b.catalogue.diagnostics.contract,"ajrm-tidal-gate-catalogue-diagnostics-v1");
+	assert.equal(segment7b.catalogue.diagnostics.contractVersion,1);
+
+	const candidateIds = [...SEGMENT_7B_BLOCKERS.keys()];
+	for (const locationId of candidateIds) {
+		assert.equal(segment7b.locations.filter((entry) => entry.id === locationId).length,1,locationId);
+		assert.equal(segment7b.catalogue.gates.filter((entry) => entry.locationId === locationId).length,1,locationId);
+	}
+
+	const setup = await fixture(t);
+	setup.app.ajrmMarineLocations.list = async () => structuredClone(segment7b.locations);
+	setup.app.ajrmMarineTidalDatabase.listPorts = () => structuredClone(segment7b.ports);
+	setup.gateCatalogue = structuredClone(segment7b.catalogue);
+
+	const constants = await setup.call("GET", "/gate/location-constants");
+	assert.equal(constants.statusCode,200);
+	assert.deepEqual(constants.body.operationalLocationIds,[]);
+	assert.equal(constants.body.gates.length,2);
+	for (const [locationId,reasons] of SEGMENT_7B_BLOCKERS) {
+		const entry = constants.body.gates.find((candidate) => candidate.locationId === locationId);
+		assert.ok(entry,locationId);
+		assert.equal(entry.calculationReady,false);
+		assert.deepEqual(entry.record.readiness,{ state:"reference-only",reasons });
+		assert.deepEqual(entry.readiness,{ state:"reference-only",reasons });
+		assert.equal(entry.referencePort.locationId,"e0e5661f-1675-4dbb-8fa0-ea8566c62ef4");
+		const diagnostic = constants.body.diagnostics.planning.find((candidate) => candidate.locationId === locationId);
+		assert.ok(diagnostic,locationId);
+		assert.ok(diagnostic.reasonCodes.includes("gate-not-operational"),locationId);
+		assert.ok(diagnostic.reasonCodes.includes("not-in-tidal-database-operational-allow-list"),locationId);
+
+		const rejected = await setup.call("GET", "/gate/tides", { query: { locationId } });
+		assert.equal(rejected.statusCode,409,locationId);
+		assert.equal(rejected.body.locationId,locationId);
+		assert.ok(rejected.body.reasonCodes.includes("gate-not-operational"),locationId);
+		assert.ok(rejected.body.reasonCodes.includes("not-in-tidal-database-operational-allow-list"),locationId);
+	}
+	assert.equal(setup.calls.tide.length,0);
 	setup.plugin.stop();
 });
 

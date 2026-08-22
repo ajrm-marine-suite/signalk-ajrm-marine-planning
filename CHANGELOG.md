@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.21 — 2026-08-22
+
+- Pin the Segment 7B Sound of Luing and Dorus Mòr Location/Tidal producer
+  projections in a standalone Planning contract fixture.
+- Prove both candidates retain their exact reference-only blocker lists, remain
+  outside Planning's effective operational set and are rejected before any
+  tide-service call.
+
 ## 0.5.20 — 2026-08-22
 
 - Consume the versioned tidal-gate v2 catalogue through stable Location IDs and

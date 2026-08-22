@@ -3,7 +3,7 @@ import { calculateFlowAt, calculateGateSchedule } from "./gate-calculator.mjs";
 import { normalizeTideEvents } from "./gate-contract.mjs";
 
 const $ = (id) => document.getElementById(id);
-const webVersion = "0.5.20";
+const webVersion = "0.5.21";
 const generalSafetyDetail = "Forecasts, tidal predictions and modelled stream rates can be wrong. Cross-check current charts, official predictions, forecasts and observed conditions; the skipper remains responsible for the passage decision.";
 
 const selectedColumns = [
