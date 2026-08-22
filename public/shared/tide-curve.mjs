@@ -28,6 +28,18 @@ export function tideCurveEventsForDays(events, now = Date.now(), days = 7) {
 	return previous && visible[0] !== previous ? [previous, ...visible] : visible;
 }
 
+export function tideEventCapabilities(events = []) {
+	const types = new Set(events.map((event) => String(event?.type || "").toLowerCase()));
+	const highWater = types.has("high");
+	const lowWater = types.has("low");
+	return Object.freeze({
+		highWater,
+		lowWater,
+		completeExtrema: highWater && lowWater,
+		curve: highWater && lowWater,
+	});
+}
+
 function eventPoints(events) {
 	const normalized = (events || []).filter((event) =>
 		Number.isFinite(Number(event?.heightM)) && !Number.isNaN(Date.parse(event?.at)),
@@ -73,6 +85,12 @@ function normalizedReferenceLevels(referenceLevels) {
 }
 
 export function tideCurveSvg(events, now = Date.now(), referenceLevels = null, { timeZone } = {}) {
+	const capabilities = tideEventCapabilities(events);
+	if (!capabilities.completeExtrema) {
+		if (!capabilities.highWater && !capabilities.lowWater) return '<p class="text-body-secondary">No tidal curve is available.</p>';
+		const available = capabilities.highWater ? "high-water" : "low-water";
+		return `<p class="text-body-secondary">No full tidal curve is available; this station supplies ${available} events only.</p>`;
+	}
 	const { events: extremes, samples } = eventPoints(events);
 	if (samples.length < 2) return "<p class=\"text-body-secondary\">No tidal curve is available.</p>";
 	const references = normalizedReferenceLevels(referenceLevels);

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.19 — 2026-08-22
+
+- Carry Tidal Database capability and caution metadata into Anchor Force.
+- Preserve genuine events from incomplete stations so the shared curve renderer
+  can explicitly refuse a misleading complete curve.
+
 ## 0.5.18 — 2026-08-21
 
 - Refresh the published shared-service readiness contract when Locations,

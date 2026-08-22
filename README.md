@@ -1,5 +1,7 @@
 # AJRM Marine Planning
 
+Version `0.5.19` carries Tidal Database capability and caution metadata into Anchor Force. Direct provider preference is consistent with Display, and incomplete stations cannot generate a misleading complete curve.
+
 Version `0.5.18` keeps its published readiness synchronized when the three standalone suite databases start after Planning. Weather Database may refresh several providers simultaneously while preserving each source and selecting a primary forecast explicitly.
 
 Version `0.5.15` packages the icon at both Signal K consumer locations: the App
@@ -18,6 +20,8 @@ AJRM Marine Planning is one Signal K plugin with two related views:
   tidal-stream constants to compare candidate transit hours.
 - **Anchor Force** checks depth, clearance, scope, wind/current load, catenary,
   rode composition and anchor holding assumptions.
+
+Version `0.5.19` carries Tidal Database capability and caution metadata into Anchor Force. Direct provider preference is therefore consistent with Display, and stations with only one kind of tidal extreme show their real events without generating a complete curve or a current-height estimate.
 
 The plugin deliberately does not own another weather feed, tide subscription or
 location database. Enable **AJRM Marine Location Editor**, **AJRM Marine Tidal Database** and **AJRM Marine Weather Database** first;

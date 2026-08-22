@@ -921,7 +921,7 @@ function renderTideDataManager() {
   document.getElementById("tideDataKeyLabel").textContent = tideData.ukhoApiKeySet ? "Set" : "Not set";
   document.getElementById("tideDataFetchedLabel").textContent = fmtDateTime(tideData.cache?.fetchedAt);
   document.getElementById("tideDataCountLabel").textContent = String(events.length);
-  document.getElementById("tideDataStatusLabel").textContent = tideData.cache?.offlineFallback
+  document.getElementById("tideDataStatusLabel").textContent = (tideData.cache?.offlineFallback
     ? "Using stored offline tide data"
     : tideData.cache?.stale
       ? "Using stale cache"
@@ -929,7 +929,7 @@ function renderTideDataManager() {
         ? "Using cache"
         : tideData.cache?.fetchedAt
           ? "Fresh fetch"
-          : "No tide data loaded";
+          : "No tide data loaded") + (tideData.advisory?.message ? ` · Caution: ${tideData.advisory.message}` : "");
   const tbody = document.querySelector("#tideDataTable tbody");
   if (!events.length) {
     tbody.innerHTML = `<tr><td colspan="5">No fetched tide events yet.</td></tr>`;

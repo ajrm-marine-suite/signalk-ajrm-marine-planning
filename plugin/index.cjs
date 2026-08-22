@@ -115,7 +115,9 @@ function publicAnchorState(state, tideResult, tideConfigured = false) {
 		managedBy: "AJRM Marine Tidal Database",
 		resolvedLocationId: tideResult?.selectedPort?.id || null,
 		referenceLevels: tideResult?.referenceLevels || null,
-		events: tideResult?.valid && resolvedSelectedPort ? ukhoEvents(tideResult) : [],
+		availability: tideResult?.availability || null,
+		advisory: tideResult?.advisory || null,
+		events: resolvedSelectedPort ? ukhoEvents(tideResult) : [],
 		cache: selectedPort ? (tideResult ? cacheShape(tideResult) : value.tideData?.cache || null) : null,
 		error: selectedPort
 			? (tideResult?.error || (tideResult ? "" : "The shared tide service is unavailable."))
