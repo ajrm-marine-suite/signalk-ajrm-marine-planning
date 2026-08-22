@@ -3,8 +3,8 @@ import { calculateFlowAt, calculateGateSchedule } from "./gate-calculator.mjs";
 import { normalizeTideEvents } from "./gate-contract.mjs";
 
 const $ = (id) => document.getElementById(id);
-const webVersion = "0.5.22";
-const generalSafetyDetail = "Forecasts, tidal predictions and modelled stream rates can be wrong. Cross-check current charts, official predictions, forecasts and observed conditions; the skipper remains responsible for the passage decision.";
+const webVersion = "0.5.23";
+const generalSafetyDetail = "All gate times, stream directions and rates are estimates—take them with a pinch of salt. Forecasts, tidal predictions and modelled streams can be wrong or shifted by weather and local effects. Cross-check current charts, official predictions, forecasts and observed conditions; the skipper remains responsible for the passage decision.";
 
 const selectedColumns = [
   { label: "Local Time (UK)", source: "Local Time", format: "localTimeWithDay" },
@@ -36,6 +36,7 @@ const locationConstantColumns = [
   { key: "readiness", label: "Readiness", type: "text" },
   { key: "readinessReasons", label: "Readiness Reasons", type: "text" },
   { key: "calculationReady", label: "Effective readiness", type: "text" },
+  { key: "calculationBasis", label: "Calculation basis", type: "text" },
   { key: "referencePortName", label: "Reference Port", type: "text" },
   { key: "referenceEvent", label: "Reference Event", type: "text" },
   { key: "turnLabels", label: "Independent Turns", type: "text" },
@@ -1129,6 +1130,7 @@ function updateGateDirections() {
 function updateGateSafetyNotice() {
   const record = locationConstants[$("gate").value]?.entry?.record;
   const notes = [
+    ...(record?.calculationBasis?.assumptions || []).map((entry) => `Calculation assumption: ${entry}`),
     ...(record?.cautions || []).map((entry) => `Caution: ${entry.summary}`),
     ...(record?.hazards || []).map((entry) => `Hazard: ${entry.summary}`),
     ...(record?.uncertainty || []).map((entry) => `${entry.blocking ? "Blocking uncertainty" : "Uncertainty"}: ${entry.summary}`)
@@ -1157,7 +1159,7 @@ function updateCourseDirectionWarning() {
 
   control.classList.toggle("courseMismatch", hasDirections && !aligned);
   warning.textContent = hasDirections && !aligned
-    ? `Course ${directionLabel(course)} does not align with any reviewed turn direction for this gate.`
+    ? `Course ${directionLabel(course)} does not align with any estimated turn direction for this gate.`
     : "";
 }
 
@@ -1460,7 +1462,7 @@ async function loadLocationConstants() {
     const operational = saved.operationalLocationIds?.length || 0;
     const total = saved.gates?.length || 0;
     $("locationConstantsStatus").textContent = operational
-      ? `Loaded ${total} tidal gates; ${operational} are operationally ready.`
+      ? `Loaded ${total} tidal gates; ${operational} have operational estimate models.`
       : `Loaded ${total} tidal gates; none are operationally ready. Legacy and incomplete records remain visible but cannot be calculated.`;
   } catch (error) {
     $("locationConstantsStatus").textContent = `Load failed: ${error.message}.`;
@@ -1491,7 +1493,10 @@ function applyLocationConstants(saved) {
       contract: record?.contract || "No timing record",
       readiness: entry.readiness?.state || "missing",
       readinessReasons: entry.readiness?.reasons?.join(" / ") || "",
-      calculationReady: entry.calculationReady ? "Operational" : "Reference only",
+      calculationReady: entry.calculationReady ? "Operational estimate" : "Reference only",
+      calculationBasis: record?.calculationBasis?.mode === "operational-with-assumptions"
+        ? `Estimated / operational with assumptions: ${(record.calculationBasis.assumptions || []).join(" ")}`
+        : entry.calculationReady ? "Estimated / reviewed operational record" : "No automatic calculation model",
       referencePortName: entry.referencePort?.name || record?.reference?.portLocationId || "",
       referenceEvent: record?.reference?.event || "Unknown",
       turnLabels: (record?.turns || []).map((turn) => `${turn.name || turn.id}: ${turn.direction?.label || "unknown"}`).join(" / "),

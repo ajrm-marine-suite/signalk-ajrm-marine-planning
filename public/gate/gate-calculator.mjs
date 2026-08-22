@@ -133,23 +133,24 @@ function exactGatePeakRate(gate, turn, regime) {
 	const forTurnAndRegime = gate.rateObservations.filter((entry) => entry?.turnId === turn.id && entry?.regime === regime);
 	const phasePeaks = forTurnAndRegime.filter((entry) => entry.kind === "phase-peak");
 	const gateLocal = phasePeaks.filter((entry) => entry.locality?.scope === "gate" && entry.locality.locationId === gate.locationId);
-	const exact = gateLocal.filter((entry) => entry.qualifier === "exact");
-	if (exact.length !== 1) {
+	const usable = gateLocal.filter((entry) => entry.qualifier === "exact"
+		|| (gate.calculationBasis?.mode === "operational-with-assumptions" && entry.qualifier === "approximate"));
+	if (usable.length !== 1) {
 		const qualifiers = [...new Set(gateLocal.map((entry) => entry.qualifier).filter(Boolean))];
-		let code = exact.length > 1 ? "rate-exact-duplicate" : "rate-exact-unavailable";
-		let message = exact.length > 1
-			? `${turn.name} has more than one exact gate-local ${regime} phase-peak rate.`
-			: `${turn.name} has no exact gate-local ${regime} phase-peak rate.`;
+		let code = usable.length > 1 ? "rate-exact-duplicate" : "rate-exact-unavailable";
+		let message = usable.length > 1
+			? `${turn.name} has more than one usable gate-local ${regime} phase-peak model input.`
+			: `${turn.name} has no usable gate-local ${regime} phase-peak model input.`;
 		if (!gateLocal.length && phasePeaks.length) {
 			code = "rate-not-gate-local";
 			message = `${turn.name} has ${regime} rate observations, but none applies to the whole gate Location.`;
-		} else if (!exact.length && qualifiers.length) {
+		} else if (!usable.length && qualifiers.length) {
 			code = "rate-qualifier-not-operational";
 			message = `${turn.name} has only ${qualifiers.join(", ")} ${regime} rate observations; Planning does not select or reinterpret a bound.`;
 		}
 		return { available: false, reasons: [issue(code, message, { turnId: turn.id, regime, qualifiers })] };
 	}
-	const observation = exact[0];
+	const observation = usable[0];
 	if (observation.unit !== "kn" || !knownMeasurement(observation.reportedValue) || !knownMeasurement(observation.lowerBound) || !knownMeasurement(observation.upperBound) || observation.reportedValue.value < 0 || observation.reportedValue.value !== observation.lowerBound.value || observation.reportedValue.value !== observation.upperBound.value) {
 		return { available: false, reasons: [issue("rate-exact-invalid", `${turn.name}'s exact ${regime} rate needs equal known non-negative reported/lower/upper values in kn.`, { turnId: turn.id, regime, observationId: observation.id })] };
 	}
@@ -309,6 +310,7 @@ export function calculateGateSchedule({ catalogue, gateLocationId, tideEvents, r
 		phases: phases.phases,
 		unavailableReferences,
 		boundaryIssues: phases.boundaryIssues,
+		calculationBasis: gate.calculationBasis || { mode:"reviewed-operational" },
 		reasons: [],
 	};
 }
@@ -342,4 +344,3 @@ export function calculateFlowAt(scheduleOrPhases, at) {
 		reasons: [],
 	};
 }
-

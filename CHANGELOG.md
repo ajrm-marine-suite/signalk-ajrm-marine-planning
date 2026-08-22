@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.5.23 — 2026-08-22
+
+- Calculate all 17 completed source-reviewed tidal gates through Tidal
+  Database's explicit operational-with-assumptions profiles, including Dorus
+  Mòr, while leaving unfinished legacy placeholders fail-closed.
+- Accept the separately identified approximate model-input rates only on those
+  profiles; preserve and display the source review, assumptions, cautions,
+  hazards and blocking uncertainty rather than presenting estimates as facts.
+- Label the UI and calculation basis as estimated, add the “take it with a
+  pinch of salt” warning, and retain the general skipper-responsibility safety
+  notice throughout the planner.
+
 ## 0.5.22 — 2026-08-22
 
 - Keep every exact Location-backed tidal gate selectable in Gate Passage,

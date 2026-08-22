@@ -86,10 +86,10 @@ function completeSlackValue(value) {
 	return false;
 }
 
-function completeRateObservation(observation, locationId) {
+function completeRateObservation(observation, locationId, allowEstimated = false) {
 	if (observation?.kind !== "phase-peak" || observation?.unit !== "kn") return false;
 	if (observation?.locality?.scope !== "gate" || observation.locality.locationId !== locationId) return false;
-	return observation.qualifier === "exact"
+	return (observation.qualifier === "exact" || (allowEstimated && observation.qualifier === "approximate"))
 		&& knownMeasurement(observation.reportedValue, { nonNegative: true })
 		&& knownMeasurement(observation.lowerBound, { nonNegative: true })
 		&& knownMeasurement(observation.upperBound, { nonNegative: true })
@@ -151,7 +151,7 @@ function gateDefinitionReasonCodes({ record, location, referencePort, sourceOper
 			&& observation?.regime === regime
 			&& observation?.locality?.scope === "gate"
 			&& observation?.locality?.locationId === record.locationId);
-		return matches.length === 1 && completeRateObservation(matches[0], record.locationId);
+		return matches.length === 1 && completeRateObservation(matches[0], record.locationId, record.calculationBasis?.mode === "operational-with-assumptions");
 	}));
 	if (!ratesComplete) reasons.push("incomplete-phase-peak-rates");
 	return [...new Set(reasons)];

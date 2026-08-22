@@ -43,7 +43,10 @@ function calculationGateIssues(gate) {
 	if (gate.legacy) add("legacy-gate-not-operational", "A migrated v1 gate is reference-only until it has been explicitly reviewed as v2.", "legacy");
 	if (gate.readiness?.state !== "operational") add("gate-readiness-not-operational", `Gate readiness is ${gate.readiness?.state || "missing"}.`, "readiness.state");
 	if (gate.provenance?.review?.state !== "reviewed") add("gate-review-not-complete", "The gate has not completed structured review.", "provenance.review.state");
-	if ((gate.uncertainty || []).some((entry) => entry?.blocking === true)) add("gate-blocking-uncertainty", "The gate has unresolved blocking uncertainty.", "uncertainty");
+	if ((gate.uncertainty || []).some((entry) => entry?.blocking === true)
+		&& gate.calculationBasis?.mode !== "operational-with-assumptions") {
+		add("gate-blocking-uncertainty", "The gate has unresolved blocking uncertainty.", "uncertainty");
+	}
 	if (gate.conventions?.offsetSign !== "positive-after-reference-event") add("gate-offset-convention-unsupported", "Offsets must explicitly be positive after the reference event.", "conventions.offsetSign");
 	if (gate.conventions?.directionBearing !== "degrees-true-current-towards") add("gate-direction-convention-unsupported", "Directions must be true bearings describing where the current flows towards.", "conventions.directionBearing");
 	if (!object(gate.reference) || typeof gate.reference.portLocationId !== "string" || !gate.reference.portLocationId.trim()) add("reference-port-invalid", "The gate needs a stable reference-port Location id.", "reference.portLocationId");
@@ -182,4 +185,3 @@ export function normalizeTideEvents(events) {
 	}
 	return { available: true, events: normalized, reasons: [] };
 }
-

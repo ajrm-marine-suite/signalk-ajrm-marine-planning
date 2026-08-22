@@ -115,6 +115,20 @@ function codes(result) {
 	return result.reasons.map((entry) => entry.code);
 }
 
+test("estimated operational profiles calculate while preserving their warning basis", () => {
+	const base = operationalGate();
+	const gate = {
+		...base,
+		calculationBasis:{ mode:"operational-with-assumptions", warning:"Take with a pinch of salt.", assumptions:["Estimated inputs."] },
+		uncertainty:[{ id:"weather-shift", blocking:true, summary:"Actual turn can shift." }],
+		rateObservations:base.rateObservations.map((entry) => ({ ...entry, qualifier:"approximate" })),
+	};
+	const result = schedule(gate);
+	assert.equal(result.available,true);
+	assert.equal(result.calculationBasis.mode,"operational-with-assumptions");
+	assert.match(result.calculationBasis.warning,/pinch of salt/i);
+});
+
 test("selection requires the computed effective operational allow-list and rejects v1", () => {
 	let result = contract.selectEffectiveOperationalGate(catalogue(operationalGate(), []), "gate-1");
 	assert.equal(result.available, false);
@@ -294,4 +308,3 @@ test("referenceLevels are explicit lower-case metre levels and invalid models fa
 	assert.equal(result.available, false);
 	assert.ok(codes(result).includes("out-of-range-policy-unsafe"));
 });
-

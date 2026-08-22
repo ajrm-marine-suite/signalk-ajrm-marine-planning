@@ -1,10 +1,11 @@
 # AJRM Marine Planning
 
-Version `0.5.22` separates gate selection from calculation readiness. Every
-Location-backed tidal gate can be selected so its sourced reference data,
-directions, cautions, hazards and uncertainty can be inspected and the stable
-Location ID can be saved. Automatic tide-stream and passage calculations remain
-available only for gates in Tidal Database's effective operational allow-list.
+Version `0.5.23` calculates all 17 completed source-reviewed named-channel
+gates through Tidal Database's explicit operational-with-assumptions profiles.
+The UI labels their times, directions and rates as estimates, displays the
+assumptions alongside original cautions, hazards and uncertainty, and tells the
+skipper to take every result with a pinch of salt. Unfinished legacy-only
+placeholders remain selectable for inspection but are not made operational.
 
 Version `0.5.21` pins cross-contract regression fixtures for the Segment 7B
 Sound of Luing and Dorus Mòr candidates from Location Editor `0.6.49` and Tidal
@@ -62,11 +63,13 @@ weather data come from their respective database diagnostics.
 
 ## Safety
 
-These are planning aids, not navigation or anchoring authorities. Forecasts,
-tidal predictions, stream models, seabed descriptions and vessel assumptions
-can be incomplete or wrong. Cross-check current official sources and observed
-conditions. For anchoring, separately check high-water loading/scope and
-low-water clearance. The skipper remains responsible for every decision.
+These are planning aids, not navigation or anchoring authorities. All gate
+times, directions and stream rates are estimates and must be taken with a pinch
+of salt. Forecasts, tidal predictions, stream models, seabed descriptions and
+vessel assumptions can be incomplete, wrong or shifted by weather and local
+effects. Cross-check current official sources and observed conditions. For
+anchoring, separately check high-water loading/scope and low-water clearance.
+The skipper remains responsible for every decision.
 
 Planning contains no writable location catalogue, provider credentials or
 private tide/weather cache. Correct spatial records in Location Editor,
@@ -78,7 +81,7 @@ Gate Passage uses Tidal Database's joined v2 catalogue. Location Editor remains
 the owner of stable gate IDs, names and geometry; Tidal Database owns timing,
 rate, provenance, review and readiness. Planning exposes no gate mutation API.
 
-Operational calculation currently requires:
+Strict evidence-backed operational calculation requires:
 
 - a reviewed native v2 record with no blocking caution, hazard or uncertainty;
 - a usable reference port and an explicit `HW` or `LW` event;
@@ -93,6 +96,13 @@ instances. It does not clamp, extrapolate, repeat a fallback cycle, invent a
 final phase, copy a missing regime, replace missing slack with zero, or impose a
 minimum stream rate. Approximate, range, up-to, more-than and named-locality rate
 observations remain visible but are display-only in this release.
+
+Completed source reviews can also carry Tidal Database's separate
+`operational-with-assumptions` profile. Planning accepts its approximate model
+inputs only within that profile, retains the original source review and
+blocking uncertainty for inspection, and returns the profile warning and
+assumption list with every schedule. This is an estimated planning model, not
+an assertion that the underlying publication supplied definitive values.
 
 Existing v1 definitions are preserved and visible as `needs-review`; none is
 silently promoted to operational v2. A saved display-name selection is migrated

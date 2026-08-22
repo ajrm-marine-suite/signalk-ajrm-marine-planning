@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Passage Planner</title>
-    <link rel="stylesheet" href="styles.css?v=0.5.22">
+    <link rel="stylesheet" href="styles.css?v=0.5.23">
   </head>
   <body>
     <header class="topbar">
@@ -22,7 +22,7 @@
     <main>
       <section class="safetyNotice" aria-label="Safety notice">
         <strong>Planning aid—not a navigation authority.</strong>
-        <span id="safetyDetail">Forecasts, tidal predictions and modelled stream rates can be wrong. Cross-check current charts, official predictions, forecasts and observed conditions; the skipper remains responsible for the passage decision.</span>
+        <span id="safetyDetail">All gate times, stream directions and rates are estimates—take them with a pinch of salt. Cross-check current charts, official predictions, forecasts and observed conditions; the skipper remains responsible for the passage decision.</span>
       </section>
 
       <nav class="tabs" aria-label="Planner tabs">
@@ -148,7 +148,7 @@
         <div class="panelHeader">
           <div>
             <h2>Tidal Gate Calculations</h2>
-            <p>Read-only v2 turn instances calculated from the declared HW/LW reference, range-pairing rule, independent turn semantics and operational readiness allow-list.</p>
+            <p>Estimated v2 turn instances calculated from the declared HW/LW reference, independent turn semantics and each gate's visible planning assumptions. Take every result with a pinch of salt.</p>
           </div>
         </div>
         <section class="tableWrap inputTableWrap" aria-label="Tidal gate calculations">
@@ -378,6 +378,6 @@
       </section>
     </main>
 
-    <script type="module" src="app.js?v=0.5.22"></script>
+    <script type="module" src="app.js?v=0.5.23"></script>
   </body>
 </html>
