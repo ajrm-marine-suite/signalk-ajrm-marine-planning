@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Passage Planner</title>
-    <link rel="stylesheet" href="styles.css?v=0.5.23">
+    <link rel="stylesheet" href="styles.css?v=0.5.24">
   </head>
   <body>
     <header class="topbar">
@@ -349,17 +349,51 @@
         <div class="panelHeader">
           <div>
             <h2>Tidal-gate data</h2>
-            <p>Read-only passage constants maintained in AJRM Marine Tidal Database.</p>
+            <p>Edit the complete spatial Location and tidal-gate record through their owning databases. Calculated status columns are refreshed from the saved records.</p>
           </div>
         </div>
         <p id="locationConstantsStatus" class="dataStatus">Loading Tidal Database constants…</p>
-        <section class="tableWrap inputTableWrap" aria-label="Read-only tidal-gate constants">
+        <section class="tableWrap inputTableWrap" aria-label="Tidal-gate data">
           <table id="locationTable">
             <thead></thead>
             <tbody></tbody>
           </table>
         </section>
       </section>
+
+      <dialog id="gateDataDialog" class="gateDataDialog">
+        <form id="gateDataForm">
+          <div class="panelHeader gateDataDialogHeader">
+            <div>
+              <h2 id="gateDataDialogTitle">Edit tidal-gate data</h2>
+              <p>All JSON fields are editable. Identity, revision and calculated readiness are verified by the owning services when saved.</p>
+            </div>
+            <button id="closeGateData" type="button" aria-label="Close tidal-gate editor">×</button>
+          </div>
+          <p class="safetyNotice"><strong>Estimated data</strong><span>Review and editing do not make tidal values definitive. Take every value with a pinch of salt and cross-check current official information and observed conditions.</span></p>
+          <p id="gateDataStatus" class="dataStatus" aria-live="polite"></p>
+          <section class="gateEditorSection">
+            <div class="gateEditorHeading">
+              <div><h3>Spatial Location record</h3><p>Name, description, types, coordinates, geometry and Location metadata.</p></div>
+              <button id="saveGateLocation" type="button">Save Location fields</button>
+            </div>
+            <textarea id="gateLocationJson" class="gateJsonEditor" rows="12" spellcheck="false" wrap="soft"></textarea>
+          </section>
+          <section class="gateEditorSection">
+            <div class="gateEditorHeading">
+              <div><h3>Tidal Database record</h3><p>Reference, turns, offsets, rates, sources, review, cautions, hazards, uncertainty and readiness.</p></div>
+              <button id="saveGateRecord" type="button">Save tidal fields</button>
+            </div>
+            <div class="markReviewControls">
+              <label for="gateReviewedBy">Reviewed by</label>
+              <input id="gateReviewedBy" type="text" maxlength="120" autocomplete="name" placeholder="Your name">
+              <button id="markGateReviewed" type="button">Mark reviewed</button>
+            </div>
+            <textarea id="gateRecordJson" class="gateJsonEditor" rows="18" spellcheck="false" wrap="soft"></textarea>
+          </section>
+          <div class="dialogActions"><button id="cancelGateData" type="button">Close</button></div>
+        </form>
+      </dialog>
 
       <section id="aboutPanel" class="tabPanel">
         <div class="panelHeader">
@@ -378,6 +412,6 @@
       </section>
     </main>
 
-    <script type="module" src="app.js?v=0.5.23"></script>
+    <script type="module" src="app.js?v=0.5.24"></script>
   </body>
 </html>

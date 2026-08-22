@@ -45,7 +45,8 @@ p {
 
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
 }
 
@@ -545,6 +546,132 @@ h2 {
   max-height: calc(100vh - 250px);
 }
 
+#locationTable td.gateDataCell {
+  max-width: 30ch;
+  white-space: normal;
+  vertical-align: top;
+}
+
+.gateDataField {
+  min-width: 18ch;
+  max-width: 30ch;
+  line-height: 1.35;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.gateDataFieldLong {
+  height: calc(3 * 1.35em + 4px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.editGateData {
+  min-width: 7.5rem;
+  padding: 7px 10px;
+  white-space: nowrap;
+}
+
+.gateDataDialog {
+  width: min(1100px, calc(100vw - 24px));
+  max-height: calc(100vh - 24px);
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  background: var(--bg);
+}
+
+.gateDataDialog::backdrop {
+  background: #17212baa;
+}
+
+.gateDataDialog form {
+  display: grid;
+  gap: 12px;
+  max-height: calc(100vh - 24px);
+  margin: 0;
+  padding: 16px;
+  overflow-y: auto;
+}
+
+.gateDataDialogHeader {
+  align-items: flex-start;
+}
+
+.gateDataDialogHeader > div {
+  flex: 1;
+}
+
+.gateDataDialogHeader > button {
+  min-width: 2.5rem;
+  padding: 7px;
+  font-size: 20px;
+}
+
+.gateEditorSection {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  background: #fff;
+}
+
+.gateEditorHeading {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.gateEditorHeading > div {
+  flex: 1;
+}
+
+.gateEditorHeading h3 {
+  margin: 0;
+}
+
+.gateJsonEditor {
+  width: 100%;
+  max-width: 100%;
+  padding: 10px;
+  border: 1px solid #9aa8b3;
+  border-radius: 5px;
+  background: #fff;
+  color: var(--ink);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  line-height: 1.35;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  overflow: auto;
+  resize: vertical;
+}
+
+.markReviewControls {
+  display: grid;
+  grid-template-columns: auto minmax(14rem, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.markReviewControls label {
+  font-weight: 650;
+}
+
+.markReviewControls input {
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid #9aa8b3;
+  border-radius: 5px;
+}
+
+.dialogActions {
+  display: flex;
+  justify-content: flex-end;
+}
+
 .comfortConstantsWrap {
   margin-top: 14px;
   max-height: 280px;
@@ -727,6 +854,12 @@ tr[data-rating="Unacceptable"] td:last-child {
 @media (max-width: 640px) {
   .hourViewGrid,
   .hourCards {
+    grid-template-columns: 1fr;
+  }
+
+  .gateEditorHeading,
+  .markReviewControls {
+    display: grid;
     grid-template-columns: 1fr;
   }
 }

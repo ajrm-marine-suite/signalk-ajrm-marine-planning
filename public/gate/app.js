@@ -3,8 +3,11 @@ import { calculateFlowAt, calculateGateSchedule } from "./gate-calculator.mjs";
 import { normalizeTideEvents } from "./gate-contract.mjs";
 
 const $ = (id) => document.getElementById(id);
-const webVersion = "0.5.23";
+const webVersion = "0.5.24";
 const generalSafetyDetail = "All gate times, stream directions and rates are estimates—take them with a pinch of salt. Forecasts, tidal predictions and modelled streams can be wrong or shifted by weather and local effects. Cross-check current charts, official predictions, forecasts and observed conditions; the skipper remains responsible for the passage decision.";
+const locationEditorApi = "/plugins/signalk-ajrm-marine-location-editor";
+const tidalDatabaseApi = "/plugins/signalk-ajrm-marine-tidal-database";
+const gateReviewerStorageKey = "ajrmMarinePlanning.gateReviewer";
 
 const selectedColumns = [
   { label: "Local Time (UK)", source: "Local Time", format: "localTimeWithDay" },
@@ -27,6 +30,7 @@ const selectedColumns = [
 ];
 
 const locationConstantColumns = [
+  { key: "edit", label: "Edit", type: "action" },
   { key: "location", label: "Location", type: "text" },
   { key: "locationId", label: "Location ID", type: "text" },
   { key: "latitude", label: "Latitude", type: "number" },
@@ -52,6 +56,9 @@ const locationConstantColumns = [
 const locationConstants = {};
 let gateCatalogue = null;
 let currentGateSchedule = null;
+let editingGateLocationId = "";
+let editingLocationRevision = null;
+let editingGateRevision = null;
 
 const gateCalculationColumns = [
   "Reference Time (UTC)",
@@ -1328,6 +1335,9 @@ function renderLocationConstantsTable() {
   thead.innerHTML = `<tr>${locationConstantColumns.map((column) => `<th>${column.label}</th>`).join("")}</tr>`;
   tbody.innerHTML = Object.values(locationConstants).map((location) => {
     const cells = locationConstantColumns.map((column) => {
+      if (column.type === "action") {
+        return `<td><button type="button" class="editGateData" data-location-id="${escapeHtml(location.locationId)}">Edit all fields</button></td>`;
+      }
       if (column.type === "link") {
         const href = googleMapsUrl(location);
         const link = href
@@ -1335,10 +1345,136 @@ function renderLocationConstantsTable() {
           : "";
         return `<td>${link}</td>`;
       }
-      return `<td>${escapeHtml(String(location[column.key] ?? ""))}</td>`;
+      const value = String(location[column.key] ?? "");
+      if (column.type === "text") {
+        const longClass = value.length > 80 ? " gateDataFieldLong" : "";
+        return `<td class="gateDataCell"><div class="gateDataField${longClass}">${escapeHtml(value)}</div></td>`;
+      }
+      return `<td>${escapeHtml(value)}</td>`;
     }).join("");
     return `<tr>${cells}</tr>`;
   }).join("");
+  for (const button of document.querySelectorAll(".editGateData")) {
+    button.addEventListener("click", () => openGateDataEditor(button.dataset.locationId));
+  }
+}
+
+function rawGateRecord(record) {
+  return record?.sourceReview || record || null;
+}
+
+async function requestJson(url, options = {}) {
+  const response = await fetch(url, { credentials: "include", cache: "no-store", ...options });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(body.error || `server returned ${response.status}`);
+  return body;
+}
+
+function parseEditorJson(id, label) {
+  try {
+    const value = JSON.parse($(id).value);
+    if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("must be a JSON object");
+    return value;
+  } catch (error) {
+    throw new Error(`${label} is not valid JSON: ${error.message}`);
+  }
+}
+
+async function openGateDataEditor(locationId) {
+  const selected = locationConstants[locationId]?.entry;
+  if (!selected) return;
+  $("gateDataStatus").textContent = "Loading the current records from their owning databases…";
+  $("gateDataDialogTitle").textContent = `Edit tidal-gate data — ${selected.name || locationId}`;
+  $("gateDataDialog").showModal();
+  try {
+    const locationsPayload = await requestJson(`${locationEditorApi}/locations?workspace=all`);
+    const locationRecord = (locationsPayload.locations || []).find((entry) => entry.id === locationId);
+    const gateRecord = rawGateRecord(selected.record);
+    if (!locationRecord) throw new Error("The Location record is unavailable.");
+    if (!gateRecord) throw new Error("The Tidal Database record is unavailable.");
+    editingGateLocationId = locationId;
+    editingLocationRevision = Number(locationRecord.revision);
+    editingGateRevision = Number(gateRecord.revision);
+    $("gateLocationJson").value = JSON.stringify(locationRecord, null, 2);
+    $("gateRecordJson").value = JSON.stringify(gateRecord, null, 2);
+    $("gateReviewedBy").value = localStorage.getItem(gateReviewerStorageKey) || "";
+    $("gateDataStatus").textContent = "Ready. Save Location and tidal records separately; each save is read back and verified before success is shown.";
+  } catch (error) {
+    $("gateDataStatus").textContent = `Editor load failed: ${error.message}`;
+  }
+}
+
+async function withBusyButton(button, task) {
+  button.disabled = true;
+  try { await task(); }
+  finally { button.disabled = false; }
+}
+
+async function saveEditedLocation() {
+  if (!editingGateLocationId) return;
+  const edited = parseEditorJson("gateLocationJson", "Location record");
+  if (edited.id !== editingGateLocationId) throw new Error("Location ID cannot be changed in this editor.");
+  const latestPayload = await requestJson(`${locationEditorApi}/locations?workspace=all`);
+  const latest = (latestPayload.locations || []).find((entry) => entry.id === editingGateLocationId);
+  if (!latest) throw new Error("The Location record no longer exists.");
+  if (Number(latest.revision) !== editingLocationRevision) throw new Error("The Location changed after this editor opened. Close and reopen it before saving.");
+  const { revision: _revision, createdAt: _createdAt, updatedAt: _updatedAt, lastEditId: _lastEditId, ...locationBody } = edited;
+  const result = await requestJson(`${locationEditorApi}/locations/${encodeURIComponent(editingGateLocationId)}`, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ ...locationBody, expectedRevision: editingLocationRevision })
+  });
+  const verifiedPayload = await requestJson(`${locationEditorApi}/locations?workspace=all`);
+  const verified = (verifiedPayload.locations || []).find((entry) => entry.id === editingGateLocationId);
+  if (!verified || JSON.stringify(verified) !== JSON.stringify(result.location)) throw new Error("Location Editor did not verify the saved record.");
+  editingLocationRevision = Number(verified.revision);
+  $("gateLocationJson").value = JSON.stringify(verified, null, 2);
+  await loadLocationConstants();
+  $("gateDataStatus").textContent = `Location revision ${verified.revision} saved and verified.`;
+}
+
+async function saveEditedGateRecord() {
+  if (!editingGateLocationId) return;
+  const edited = parseEditorJson("gateRecordJson", "Tidal Database record");
+  if (edited.locationId !== editingGateLocationId) throw new Error("Gate Location ID cannot be changed in this editor.");
+  const catalogue = await requestJson(`${tidalDatabaseApi}/definitions/gates`);
+  const latestProjected = (catalogue.gates || []).find((entry) => entry.locationId === editingGateLocationId);
+  const latest = rawGateRecord(latestProjected);
+  if (!latest) throw new Error("The tidal-gate record no longer exists.");
+  if (Number(latest.revision) !== editingGateRevision) throw new Error("The tidal-gate record changed after this editor opened. Close and reopen it before saving.");
+  const intended = { ...edited, locationId: editingGateLocationId, revision: editingGateRevision + 1 };
+  const result = await requestJson(`${tidalDatabaseApi}/definitions/gates/${encodeURIComponent(editingGateLocationId)}`, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(intended)
+  });
+  const verifiedCatalogue = await requestJson(`${tidalDatabaseApi}/definitions/gates`);
+  const verified = rawGateRecord((verifiedCatalogue.gates || []).find((entry) => entry.locationId === editingGateLocationId));
+  if (!verified || JSON.stringify(verified) !== JSON.stringify(intended) || JSON.stringify(result.gate) !== JSON.stringify(intended)) {
+    throw new Error("Tidal Database did not verify every saved field.");
+  }
+  editingGateRevision = Number(verified.revision);
+  $("gateRecordJson").value = JSON.stringify(verified, null, 2);
+  await loadLocationConstants();
+  $("gateDataStatus").textContent = `Tidal record revision ${verified.revision} saved and verified. Operational status was recalculated; all values remain estimates.`;
+}
+
+async function markEditedGateReviewed() {
+  const reviewedBy = $("gateReviewedBy").value.trim();
+  if (!reviewedBy) throw new Error("Enter your name in ‘Reviewed by’ first.");
+  const edited = parseEditorJson("gateRecordJson", "Tidal Database record");
+  edited.provenance = edited.provenance && typeof edited.provenance === "object" ? edited.provenance : { sources: [] };
+  edited.provenance.review = {
+    ...(edited.provenance.review || {}),
+    state: "reviewed",
+    reviewedBy,
+    reviewedAt: new Date().toISOString(),
+    notes: edited.provenance.review?.notes ?? null
+  };
+  localStorage.setItem(gateReviewerStorageKey, reviewedBy);
+  $("gateRecordJson").value = JSON.stringify(edited, null, 2);
+  await saveEditedGateRecord();
+  $("gateDataStatus").textContent += " Review marker recorded; this does not make the data definitive.";
 }
 
 function tideRowsFromApi(payload) {
@@ -1902,6 +2038,30 @@ $("refreshWeather").addEventListener("click", refreshWeather);
 $("refreshTides").addEventListener("click", refreshTides);
 $("refreshAll").addEventListener("click", refreshAll);
 $("saveSettings").addEventListener("click", saveSettings);
+$("gateDataForm").addEventListener("submit", (event) => event.preventDefault());
+for (const id of ["closeGateData", "cancelGateData"]) {
+  $(id).addEventListener("click", () => $("gateDataDialog").close());
+}
+$("gateDataDialog").addEventListener("close", () => {
+  editingGateLocationId = "";
+  editingLocationRevision = null;
+  editingGateRevision = null;
+});
+$("saveGateLocation").addEventListener("click", (event) => withBusyButton(event.currentTarget, async () => {
+  $("gateDataStatus").textContent = "Saving and verifying Location fields…";
+  try { await saveEditedLocation(); }
+  catch (error) { $("gateDataStatus").textContent = `Location was not saved: ${error.message}`; }
+}));
+$("saveGateRecord").addEventListener("click", (event) => withBusyButton(event.currentTarget, async () => {
+  $("gateDataStatus").textContent = "Saving and verifying tidal fields…";
+  try { await saveEditedGateRecord(); }
+  catch (error) { $("gateDataStatus").textContent = `Tidal record was not saved: ${error.message}`; }
+}));
+$("markGateReviewed").addEventListener("click", (event) => withBusyButton(event.currentTarget, async () => {
+  $("gateDataStatus").textContent = "Recording and verifying the review…";
+  try { await markEditedGateReviewed(); }
+  catch (error) { $("gateDataStatus").textContent = `Review was not saved: ${error.message}`; }
+}));
 $("hourSelect").addEventListener("change", () => {
   updateHourStepButtons();
   renderHourVisual();

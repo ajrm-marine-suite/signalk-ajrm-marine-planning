@@ -1,6 +1,6 @@
 # AJRM Marine Planning
 
-Version `0.5.23` calculates all 17 completed source-reviewed named-channel
+Version `0.5.24` calculates all 24 completed source-reviewed named-channel
 gates through Tidal Database's explicit operational-with-assumptions profiles.
 The UI labels their times, directions and rates as estimates, displays the
 assumptions alongside original cautions, hazards and uncertainty, and tells the
@@ -70,6 +70,14 @@ vessel assumptions can be incomplete, wrong or shifted by weather and local
 effects. Cross-check current official sources and observed conditions. For
 anchoring, separately check high-water loading/scope and low-water clearance.
 The skipper remains responsible for every decision.
+
+The Gate Passage **Tidal Gate Data** tab now provides an **Edit all fields**
+action for every gate. Its editor exposes the complete Location and Tidal
+Database JSON records without flattening nested turns, sources, cautions,
+hazards or uncertainty. Each owner record is saved separately with revision
+conflict protection and an immediate read-back comparison. Enter a reviewer
+name and choose **Mark reviewed** to save a structured review timestamp; review
+does not make estimated data definitive or alter readiness by itself.
 
 Planning contains no writable location catalogue, provider credentials or
 private tide/weather cache. Correct spatial records in Location Editor,

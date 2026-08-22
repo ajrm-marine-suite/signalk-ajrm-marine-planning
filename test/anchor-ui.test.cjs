@@ -9,6 +9,7 @@ const html = fs.readFileSync(path.join(__dirname, "../public/anchor/index.html")
 const script = fs.readFileSync(path.join(__dirname, "../public/anchor/app.js"), "utf8");
 const gateHtml = fs.readFileSync(path.join(__dirname, "../public/gate/index.html"), "utf8");
 const gateScript = fs.readFileSync(path.join(__dirname, "../public/gate/app.js"), "utf8");
+const gateStyles = fs.readFileSync(path.join(__dirname, "../public/gate/styles.css"), "utf8");
 const suiteHtml = fs.readFileSync(path.join(__dirname, "../public/index.html"), "utf8");
 const backend = fs.readFileSync(path.join(__dirname, "../plugin/index.cjs"), "utf8");
 const sharedTideCurve = fs.readFileSync(path.join(__dirname, "../public/shared/tide-curve.mjs"), "utf8");
@@ -74,6 +75,25 @@ test("Planning reads tidal contracts without owning correction calculations", ()
 	assert.match(backend, /ajrmMarineTidalDatabase/);
 	assert.doesNotMatch(backend, /applySecondary|heightDifferencesM/);
 	assert.doesNotMatch(gateScript, /location-constants[^\n]+method:\s*"POST"/);
+});
+
+test("tidal-gate data exposes complete verified editors and an explicit review action", () => {
+	for (const id of ["gateDataDialog", "gateLocationJson", "gateRecordJson", "saveGateLocation", "saveGateRecord", "gateReviewedBy", "markGateReviewed"]) {
+		assert.match(gateHtml, new RegExp(`id=["']${id}["']`));
+	}
+	assert.match(gateHtml, /All JSON fields are editable/);
+	assert.match(gateHtml, /do not make tidal values definitive/);
+	assert.match(gateScript, /class="editGateData"[\s\S]*?Edit all fields/);
+	assert.match(gateScript, /locationEditorApi[\s\S]*?method: "PUT"/);
+	assert.match(gateScript, /tidalDatabaseApi[\s\S]*?method: "PUT"/);
+	assert.match(gateScript, /Number\(latest\.revision\) !== editingLocationRevision/);
+	assert.match(gateScript, /Number\(latest\.revision\) !== editingGateRevision/);
+	assert.match(gateScript, /JSON\.stringify\(verified\) !== JSON\.stringify\(result\.location\)/);
+	assert.match(gateScript, /JSON\.stringify\(verified\) !== JSON\.stringify\(intended\)/);
+	assert.match(gateScript, /state: "reviewed",[\s\S]*?reviewedBy,[\s\S]*?reviewedAt: new Date\(\)\.toISOString\(\)/);
+	assert.match(gateScript, /Review marker recorded; this does not make the data definitive/);
+	assert.match(gateScript, /value\.length > 80 \? " gateDataFieldLong"/);
+	assert.match(gateStyles, /\.gateDataFieldLong\s*\{[\s\S]*?height: calc\(3 \* 1\.35em \+ 4px\);[\s\S]*?overflow-y: auto;/);
 });
 
 test("gate UI adapts the Planning v2 envelope and persists only stable Location IDs", () => {

@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.5.24 — 2026-08-22
+
+- Make every source field behind the Tidal Gate Data tab editable through
+  complete Location Editor and Tidal Database record editors, while leaving
+  service-derived readiness and revision fields under their owning contracts.
+- Add an explicit reviewer-name and **Mark reviewed** action that timestamps,
+  saves and reads back the structured review without implying that estimated
+  data is definitive or automatically changing operational readiness.
+- Protect both save paths against stale revisions and report success only
+  after the owning service returns the intended record and a fresh GET verifies
+  it.
+- Wrap displayed text fields to roughly three lines and give values longer than
+  80 characters their own vertical scroll area.
+
 ## 0.5.23 — 2026-08-22
 
 - Calculate all 17 completed source-reviewed tidal gates through Tidal
