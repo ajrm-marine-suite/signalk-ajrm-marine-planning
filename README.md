@@ -1,5 +1,11 @@
 # AJRM Marine Planning
 
+Version `0.5.22` separates gate selection from calculation readiness. Every
+Location-backed tidal gate can be selected so its sourced reference data,
+directions, cautions, hazards and uncertainty can be inspected and the stable
+Location ID can be saved. Automatic tide-stream and passage calculations remain
+available only for gates in Tidal Database's effective operational allow-list.
+
 Version `0.5.21` pins cross-contract regression fixtures for the Segment 7B
 Sound of Luing and Dorus Mòr candidates from Location Editor `0.6.49` and Tidal
 Database `0.1.18`. Both remain reference-only: Planning preserves their exact

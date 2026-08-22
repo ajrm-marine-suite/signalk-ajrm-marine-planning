@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.5.22 — 2026-08-22
+
+- Keep every exact Location-backed tidal gate selectable in Gate Passage,
+  including reference-only and legacy records.
+- Persist reference-only gate selections and expose their sourced turn labels,
+  cautions, hazards and uncertainty without promoting them to operational
+  calculations.
+- Retain the native-v2 calculation boundary: provider refresh and passage
+  calculations still require an effectively operational gate.
+
 ## 0.5.21 — 2026-08-22
 
 - Pin the Segment 7B Sound of Luing and Dorus Mòr Location/Tidal producer

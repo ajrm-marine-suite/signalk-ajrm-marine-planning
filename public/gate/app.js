@@ -3,7 +3,7 @@ import { calculateFlowAt, calculateGateSchedule } from "./gate-calculator.mjs";
 import { normalizeTideEvents } from "./gate-contract.mjs";
 
 const $ = (id) => document.getElementById(id);
-const webVersion = "0.5.21";
+const webVersion = "0.5.22";
 const generalSafetyDetail = "Forecasts, tidal predictions and modelled stream rates can be wrong. Cross-check current charts, official predictions, forecasts and observed conditions; the skipper remains responsible for the passage decision.";
 
 const selectedColumns = [
@@ -819,7 +819,7 @@ function updateFreshness() {
     const gate = $("gate").value;
     const location = locationConstants[gate];
     locationCard.dataset.expired = "false";
-    locationCard.querySelector("strong").textContent = location?.location || "No operational gate selected";
+    locationCard.querySelector("strong").textContent = location?.location || "No tidal gate selected";
     locationCard.querySelector("small").textContent = location?.latitude && location?.longitude
       ? `${Number(location.latitude).toFixed(5)}, ${Number(location.longitude).toFixed(5)}`
       : "No latitude/longitude set";
@@ -1116,11 +1116,14 @@ function updateGateDirections() {
   const location = locationConstants[$("gate").value];
   const turns = location?.entry?.record?.turns || [];
   const labels = turns.flatMap((turn) => {
+    if (!turn?.direction?.label) return [];
     const bearing = turn?.direction?.bearingDegreesTrue;
-    if (bearing?.state !== "known" || !Number.isFinite(bearing.value)) return [];
-    return [`${turn.name}: ${turn.direction.label} (${Number(bearing.value).toFixed(0)}°T)`];
+    const bearingLabel = bearing?.state === "known" && Number.isFinite(bearing.value)
+      ? `${Number(bearing.value).toFixed(0)}°T`
+      : "true bearing unavailable";
+    return [`${turn.name || turn.id}: ${turn.direction.label} (${bearingLabel})`];
   });
-  output.textContent = labels.length ? labels.join(" / ") : "No operational turn directions";
+  output.textContent = labels.length ? labels.join(" / ") : "No sourced turn directions";
 }
 
 function updateGateSafetyNotice() {
@@ -1275,17 +1278,14 @@ function googleMapsUrl(location) {
 function syncGateOptions(selected = $("gate").value) {
   const gate = $("gate");
   const entries = Object.values(locationConstants);
-  const selectedIsReady = Boolean(locationConstants[selected]?.entry?.calculationReady);
-  const active = selectedIsReady ? selected : "";
-  const placeholder = entries.some((entry) => entry.entry.calculationReady)
-    ? "Select an operational tidal gate"
-    : "No operational tidal-gate records";
+  const active = locationConstants[selected] ? selected : "";
+  const placeholder = entries.length ? "Select a tidal gate" : "No tidal-gate records";
   gate.innerHTML = [
     `<option value=""${active ? "" : " selected"}>${placeholder}</option>`,
     ...entries.map((entry) => {
       const ready = entry.entry.calculationReady;
-      const label = ready ? entry.location : `${entry.location} (${entry.readiness}; display only)`;
-      return `<option value="${escapeHtml(entry.locationId)}"${entry.locationId === active ? " selected" : ""}${ready ? "" : " disabled"}>${escapeHtml(label)}</option>`;
+      const label = ready ? entry.location : `${entry.location} (${entry.readiness})`;
+      return `<option value="${escapeHtml(entry.locationId)}"${entry.locationId === active ? " selected" : ""}>${escapeHtml(label)}</option>`;
     })
   ].join("");
   gate.value = active;
@@ -1491,7 +1491,7 @@ function applyLocationConstants(saved) {
       contract: record?.contract || "No timing record",
       readiness: entry.readiness?.state || "missing",
       readinessReasons: entry.readiness?.reasons?.join(" / ") || "",
-      calculationReady: entry.calculationReady ? "Operational" : "Excluded",
+      calculationReady: entry.calculationReady ? "Operational" : "Reference only",
       referencePortName: entry.referencePort?.name || record?.reference?.portLocationId || "",
       referenceEvent: record?.reference?.event || "Unknown",
       turnLabels: (record?.turns || []).map((turn) => `${turn.name || turn.id}: ${turn.direction?.label || "unknown"}`).join(" / "),
@@ -1571,7 +1571,7 @@ async function saveSettings() {
     const settings = await response.json();
     if (!isCurrentGateRequest(selectedGateLocationId, requestGeneration)) return;
     appSettings = { ...appSettings, ...settings };
-    if (settings.selectedGateLocationId && locationConstants[settings.selectedGateLocationId]?.entry?.calculationReady) $("gate").value = settings.selectedGateLocationId;
+    if (settings.selectedGateLocationId && locationConstants[settings.selectedGateLocationId]) $("gate").value = settings.selectedGateLocationId;
     if (settings.selectedHeading) $("heading").value = settings.selectedHeading;
     if (settings.selectedCrewCapability) $("crewCapability").value = settings.selectedCrewCapability;
     $("speed").value = settings.speed || speed;
@@ -1699,8 +1699,11 @@ async function loadWeatherForGate(settings, options = {}) {
 async function refreshWeather(options = {}) {
   const settings = settingsFromControls();
   const requestGeneration = options.requestGeneration ?? gateLoadGeneration;
-  if (!settings.gate) {
-    const warning = "Select an operational tidal gate before refreshing weather.";
+  const selectedEntry = locationConstants[settings.gate]?.entry;
+  if (!settings.gate || !selectedEntry?.calculationReady) {
+    const warning = settings.gate
+      ? `${settings.gateName} is selected for reference, but automatic weather-and-stream planning is unavailable until its tidal-gate record is operational.`
+      : "Select a tidal gate before refreshing weather.";
     $("dataStatus").textContent = warning;
     return { ok: false, warning };
   }
@@ -1742,8 +1745,11 @@ async function refreshTides(options = {}) {
   const settings = settingsFromControls();
   const requestGeneration = options.requestGeneration ?? gateLoadGeneration;
   const isManualRefresh = options.manualRefresh !== false;
-  if (!settings.gate) {
-    const warning = "Select an operational tidal gate before loading tides.";
+  const selectedEntry = locationConstants[settings.gate]?.entry;
+  if (!settings.gate || !selectedEntry?.calculationReady) {
+    const warning = settings.gate
+      ? `${settings.gateName} is selected for reference, but automatic tide-stream calculation is unavailable until its tidal-gate record is operational.`
+      : "Select a tidal gate before loading tides.";
     if (!options.silent) $("dataStatus").textContent = warning;
     return { ok: false, warning };
   }
@@ -1830,7 +1836,11 @@ async function refreshAll() {
 async function loadStoredData() {
   const requestGeneration = ++gateLoadGeneration;
   const settings = settingsFromControls();
-  $("locationLabel").textContent = settings.gateName || "No operational tidal gate selected";
+  const selectedEntry = locationConstants[settings.gate]?.entry;
+  $("locationLabel").textContent = settings.gateName
+    ? `${settings.gateName}${selectedEntry?.calculationReady ? "" : " — reference data"}`
+    : "No tidal gate selected";
+  applySelectedStandardPort();
   updateGateDirections();
   updateGateSafetyNotice();
   currentWeatherRows = null;
@@ -1844,8 +1854,10 @@ async function loadStoredData() {
   renderReadOnlyTable("weatherDataTable", [fetchedWeatherColumns], fetchedWeatherColumns);
   renderReadOnlyTable("fetchedTideTable", [fetchedTideColumns], fetchedTideColumns);
   renderReadOnlyTable("gateCalcTable", currentTideRows, gateCalculationColumns);
-  if (!settings.gate || !locationConstants[settings.gate]?.entry?.calculationReady) {
-    $("dataStatus").textContent = "No calculation has run. Existing legacy and incomplete gate records are display-only until reviewed as operational v2.";
+  if (!settings.gate || !selectedEntry?.calculationReady) {
+    $("dataStatus").textContent = settings.gate
+      ? `${settings.gateName} is selected. Its sourced location, turn labels, cautions, hazards and uncertainty are available for inspection, but automatic passage calculations remain unavailable until the record is operational.`
+      : "Select a tidal gate to inspect its sourced data.";
     updateFreshness();
     return;
   }

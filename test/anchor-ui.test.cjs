@@ -110,11 +110,15 @@ test("gate UI preserves reviewed v2 turn, reference, slack and rate semantics", 
 	assert.doesNotMatch(gateScript, /tideRate\s*=\s*0|tideDir\s*=\s*["']-["']/);
 });
 
-test("gate UI fails closed for display-only, unavailable, stale and unselected records", () => {
-	assert.match(gateScript, /const selectedIsReady = Boolean\(locationConstants\[selected\]\?\.entry\?\.calculationReady\);/);
-	assert.match(gateScript, /const active = selectedIsReady \? selected : "";/);
-	assert.match(gateScript, /\$\{ready \? "" : " disabled"\}/);
-	assert.match(gateScript, /\$\{entry\.location} \(\$\{entry\.readiness}; display only\)/);
+test("gate UI keeps reference records selectable while calculations fail closed", () => {
+	assert.match(gateScript, /const active = locationConstants\[selected\] \? selected : "";/);
+	assert.match(gateScript, /const placeholder = entries\.length \? "Select a tidal gate" : "No tidal-gate records";/);
+	assert.doesNotMatch(gateScript, /\$\{ready \? "" : " disabled"\}/);
+	assert.match(gateScript, /\$\{entry\.location} \(\$\{entry\.readiness}\)/);
+	assert.match(gateScript, /locationConstants\[settings\.selectedGateLocationId\]\) \$\("gate"\)\.value = settings\.selectedGateLocationId;/);
+	assert.match(gateScript, /\$\{settings\.gateName} is selected\. Its sourced location, turn labels, cautions, hazards and uncertainty are available for inspection/);
+	assert.match(gateScript, /selectedEntry\?\.calculationReady \? "" : " — reference data"/);
+	assert.match(gateScript, /automatic tide-stream calculation is unavailable until its tidal-gate record is operational/);
 	assert.match(gateScript, /compatibility:\s*entry\.compatibility\?\.mode \|\| "native-v2"/);
 	assert.match(gateScript, /let gateLoadGeneration = 0;/);
 	assert.match(gateScript, /function isCurrentGateRequest\(gateLocationId, generation\) \{\s*return \$\("gate"\)\.value === gateLocationId && generation === gateLoadGeneration;/);
@@ -123,6 +127,6 @@ test("gate UI fails closed for display-only, unavailable, stale and unselected r
 	assert.match(recalculateGatePlanScript, /if \(!currentWeatherRows \|\| !currentGateSchedule\?\.available\) \{\s*clearCalculatedViews\(\);[\s\S]*?return;/);
 	assert.match(recalculateGatePlanScript, /if \(rows\.length < 2\) \{\s*clearCalculatedViews\(\);/);
 	assert.match(loadStoredGateDataScript, /const requestGeneration = \+\+gateLoadGeneration;/);
-	assert.match(loadStoredGateDataScript, /currentTideEvents = null;[\s\S]*?clearCalculatedViews\(\);[\s\S]*?renderReadOnlyTable\("weatherDataTable", \[fetchedWeatherColumns\][\s\S]*?renderReadOnlyTable\("fetchedTideTable", \[fetchedTideColumns\][\s\S]*?if \(!settings\.gate \|\| !locationConstants\[settings\.gate\]\?\.entry\?\.calculationReady\)/);
+	assert.match(loadStoredGateDataScript, /currentTideEvents = null;[\s\S]*?clearCalculatedViews\(\);[\s\S]*?renderReadOnlyTable\("weatherDataTable", \[fetchedWeatherColumns\][\s\S]*?renderReadOnlyTable\("fetchedTideTable", \[fetchedTideColumns\][\s\S]*?if \(!settings\.gate \|\| !selectedEntry\?\.calculationReady\)/);
 	assert.match(loadStoredGateDataScript, /await loadWeatherForGate\(settings, \{ requestGeneration \}\);\s*if \(!isCurrentGateRequest\(settings\.gate, requestGeneration\)\) return;[\s\S]*?await refreshTides\(\{[^}]*requestGeneration \}\);\s*if \(!isCurrentGateRequest\(settings\.gate, requestGeneration\)\) return;/);
 });
